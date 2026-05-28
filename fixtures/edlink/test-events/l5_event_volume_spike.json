@@ -1,0 +1,15 @@
+{
+  "scenario_id": "l5_event_volume_spike",
+  "label": "L5: Event volume spike",
+  "section": "thresholds",
+  "kind": "l5_threshold",
+  "description": "Simulates an inbound page whose event count exceeds the 5x baseline threshold. Sync fails; THRESHOLD_EVENT_VOLUME_SPIKE alert fires with the baseline visible.",
+  "data": {
+    "code": "THRESHOLD_EVENT_VOLUME_SPIKE",
+    "page_event_count": 2400,
+    "baseline_median": 380,
+    "ratio": 6.3,
+    "alert_code": "alert.sync_failure",
+    "alert_severity": "critical"
+  }
+}

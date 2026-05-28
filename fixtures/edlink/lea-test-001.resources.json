@@ -1,0 +1,97 @@
+{
+  "lea_id": "lea-test-001",
+  "comment": "Partner-side snapshot of canonical entities for lea-test-001. Mirrors the end-state of the .events.json timeline (stu-001 renamed and re-graded by evt_007, stu-003 deleted by evt_008). Reconciliation against this fixture should report 'matched' once the event timeline is drained, and bulk-load against this fixture from a cold-start cursor should produce the same canonical state as event-replay.",
+  "people": [
+    {
+      "sourcedId": "stu-001",
+      "givenName": "Alex",
+      "familyName": "Morgan",
+      "grades": ["06"],
+      "preferredFirstName": null,
+      "primaryOrg": {"sourcedId": "sch-001", "type": "org"},
+      "userIds": {"sis": "100001", "edlink": "edl-100001"},
+      "roles": [{"role": "student", "roleType": "primary"}]
+    },
+    {
+      "sourcedId": "stu-002",
+      "givenName": "Bryn",
+      "familyName": "Lee",
+      "grades": ["06"],
+      "preferredFirstName": "Brynn",
+      "primaryOrg": {"sourcedId": "sch-001", "type": "org"},
+      "userIds": {"sis": "100002", "edlink": "edl-100002"},
+      "roles": [{"role": "student", "roleType": "primary"}]
+    },
+    {
+      "sourcedId": "tch-001",
+      "givenName": "Pat",
+      "familyName": "Reyes",
+      "grades": [],
+      "preferredFirstName": null,
+      "primaryOrg": {"sourcedId": "sch-001", "type": "org"},
+      "userIds": {"sis": "200001"},
+      "roles": [{"role": "teacher", "roleType": "primary"}]
+    }
+  ],
+  "enrollments": [
+    {
+      "sourcedId": "enr-001",
+      "user": {"sourcedId": "stu-001", "type": "user"},
+      "class": {"sourcedId": "cls-A", "type": "class"},
+      "beginDate": "2026-08-15",
+      "endDate": "2027-06-12",
+      "primary": true
+    },
+    {
+      "sourcedId": "enr-002",
+      "user": {"sourcedId": "stu-002", "type": "user"},
+      "class": {"sourcedId": "cls-A", "type": "class"},
+      "beginDate": "2026-08-15",
+      "endDate": "2027-06-12",
+      "primary": true
+    }
+  ],
+  "classes": [
+    {
+      "sourcedId": "cls-A",
+      "title": "Sixth Grade Homeroom A",
+      "classCode": "6-HR-A",
+      "school": {"sourcedId": "sch-001", "type": "org"},
+      "term": {"sourcedId": "term-2026-fall", "type": "academicSession"}
+    }
+  ],
+  "academic_sessions": [
+    {
+      "sourcedId": "term-2026-fall",
+      "title": "Fall 2026",
+      "type": "term",
+      "schoolYear": "2026",
+      "startDate": "2026-08-15",
+      "endDate": "2026-12-19"
+    },
+    {
+      "sourcedId": "term-2027-spring",
+      "title": "Spring 2027",
+      "type": "term",
+      "schoolYear": "2026",
+      "startDate": "2027-01-06",
+      "endDate": "2027-06-12"
+    }
+  ],
+  "orgs": [
+    {
+      "sourcedId": "sch-001",
+      "name": "Lincoln Middle School",
+      "identifier": "LMS-01",
+      "type": "school",
+      "parent": {"sourcedId": "lea-test-001", "type": "org"}
+    },
+    {
+      "sourcedId": "lea-test-001",
+      "name": "Test LEA 001",
+      "identifier": "TLE-001",
+      "type": "district",
+      "parent": null
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "scenario_id": "l1_partner_unavailable",
+  "label": "L1: Partner unavailable (503)",
+  "section": "validation",
+  "kind": "l1_failure",
+  "description": "Simulates EdLink returning HTTP 503. Sync fails; the retry scheduler picks up the failed job on the next sweep.",
+  "data": {
+    "code": "HTTP_INTEGRITY_FAILED",
+    "http_status": 503,
+    "error": "Partner returned 503 Service Unavailable; backoff scheduled.",
+    "alert_code": "alert.sync_failure",
+    "alert_severity": "critical"
+  }
+}

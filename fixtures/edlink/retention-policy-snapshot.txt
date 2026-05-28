@@ -1,0 +1,48 @@
+# EdLink Events API retention + payload contract snapshot
+#
+# This file is a normalized snapshot of the load-bearing claims our
+# design depends on from EdLink's public Events API documentation at
+# https://ed.link/docs/api/v2.0/events/overview. The monthly retention
+# drift job (see edlink_rostering.services.retention_drift) fetches the live
+# page, normalizes it through the same pipeline that produced this
+# file, and diffs the result against this snapshot. Drift fires the
+# `retention_policy_drift` alert.
+#
+# Captured: 2026-05-27
+# Verified by: Stephen Staker (POC session 8, EdLink v2.0)
+# Source: https://ed.link/docs/api/v2.0/events/overview
+#
+# Normalization rules applied to BOTH this snapshot and the fetched
+# text before diffing:
+#  - lowercase
+#  - collapse runs of whitespace (including newlines) to one space
+#  - strip leading and trailing whitespace
+#  - keep punctuation; drop nothing else
+#
+# Editing this file by hand is the correct response when the live
+# docs page legitimately changes (e.g., retention window extended).
+# Re-capture the load-bearing claims, run the drift-check test, and
+# commit both this snapshot AND the design-doc updates in the same
+# change set.
+#
+# Load-bearing claims captured below. The drift job does NOT diff the
+# entire rendered page; it diffs the load-bearing-claim set. The set
+# is intentionally narrow so cosmetic doc changes do not page on-call.
+
+events api retention: 30 days. events with a date older than 30 days are not returned by the events endpoint. cursors past the retention window receive an empty range or an explicit cursor-too-old error.
+
+event payload shape: each event has the fields id, date, type, data, target, target_id, integration_id, and materialization_id. id is a string and is the cursor primitive. date is iso-8601 with timezone (renamed from created_date in v2.0). type follows the pattern entity.action where entity is the canonical resource name (person, enrollment, class, term, org) and action is one of created, updated, deleted.
+
+pagination: the response is paginated via the $after parameter (cursor) and the $first parameter (page size). callers paginate by passing the highest id from the previous page as the $after parameter, or by following the $next url field present in the response when has_more is true. either mechanism is supported.
+
+authentication: per-integration bearer token in the authorization header. tokens are scoped to a single integration (one tenant per token). vendor-level application credentials and the service-account access token are distinct from the per-integration bearer token and do not authorize the events endpoint directly.
+
+deletion semantics: deletion is represented as an event with action deleted. soft delete and hard delete on the upstream both surface as a single event.deleted record at the events endpoint. payload includes the source-side marker when the upstream distinguishes the two.
+
+ordering: events within a single response page are ordered by id ascending. the highest id in the page is the cursor primitive for the next call.
+
+empty list: when a cursor is at the latest known event id, the events endpoint returns an empty events array with has_more false and a $next url that re-polls from the same cursor.
+
+rate limiting: rate limits are documented per integration token. the endpoint returns standard http 429 with a retry-after header when the limit is hit.
+
+retention window enforcement: the 30-day window is a hard ceiling. an integration whose cursor has fallen past the window must re-bulk-load via the resource endpoints and reset the cursor. the events endpoint does not deliver events older than the retention window even when asked.

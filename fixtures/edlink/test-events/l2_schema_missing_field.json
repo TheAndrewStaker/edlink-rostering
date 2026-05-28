@@ -1,0 +1,14 @@
+{
+  "scenario_id": "l2_schema_missing_field",
+  "label": "L2: Schema validation failure",
+  "section": "validation",
+  "kind": "l2_failure",
+  "description": "Simulates an EdLink person.created event missing the required givenName. Sync fails with structured error; schema_drift alert fires.",
+  "data": {
+    "code": "SCHEMA_MISSING_FIELD",
+    "event_id": "evt_test_l2",
+    "field": "givenName",
+    "alert_code": "alert.schema_drift",
+    "alert_severity": "warning"
+  }
+}

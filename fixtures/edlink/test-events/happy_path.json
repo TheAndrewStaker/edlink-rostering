@@ -1,0 +1,14 @@
+{
+  "scenario_id": "happy_path",
+  "label": "Happy path delta",
+  "section": "happy",
+  "kind": "happy_delta",
+  "description": "Adds a new student plus an enrollment. Sync succeeds; student and enrollment counts tick up.",
+  "data": {
+    "student_suffix": "tester",
+    "given_name": "Sam",
+    "family_name": "Quincy",
+    "grade": "07",
+    "primary_school_id": "sch-dev"
+  }
+}

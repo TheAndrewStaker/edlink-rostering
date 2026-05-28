@@ -1,0 +1,15 @@
+{
+  "scenario_id": "l5_population_shift",
+  "label": "L5: Population shift",
+  "section": "thresholds",
+  "kind": "l5_threshold",
+  "description": "Simulates a page whose deletions would shift the live student population past the 15 percent guard. Sync fails; severity rail lights warning.",
+  "data": {
+    "code": "THRESHOLD_POPULATION_SHIFT",
+    "live_count_before": 412,
+    "projected_count_after": 318,
+    "shift_pct": 22.8,
+    "alert_code": "alert.sync_failure",
+    "alert_severity": "critical"
+  }
+}

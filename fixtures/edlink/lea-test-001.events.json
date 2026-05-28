@@ -1,0 +1,125 @@
+{
+  "lea_id": "lea-test-001",
+  "comment": "Synthetic EdLink event timeline for the rostering POC demo. Event shapes mirror OneRoster 1.2; the EdLink-normalized shape is [VERIFY against sandbox]. Timeline: initial roster (events 001-006), then a name change and a deletion (007-008) so the revert path can demo cleanly.",
+  "events": [
+    {
+      "id": "evt_001",
+      "created_date": "2026-05-19T10:00:00+00:00",
+      "type": "person.created",
+      "data": {
+        "sourcedId": "stu-001",
+        "status": "active",
+        "givenName": "Alex",
+        "familyName": "Morgan",
+        "grades": ["05"],
+        "preferredFirstName": null,
+        "primaryOrg": {"sourcedId": "sch-001", "type": "org"},
+        "userIds": {"sis": "100001", "edlink": "edl-100001"},
+        "roles": [{"role": "student", "roleType": "primary"}]
+      }
+    },
+    {
+      "id": "evt_002",
+      "created_date": "2026-05-19T10:00:01+00:00",
+      "type": "person.created",
+      "data": {
+        "sourcedId": "stu-002",
+        "status": "active",
+        "givenName": "Bryn",
+        "familyName": "Lee",
+        "grades": ["06"],
+        "preferredFirstName": "Brynn",
+        "primaryOrg": {"sourcedId": "sch-001", "type": "org"},
+        "userIds": {"sis": "100002", "edlink": "edl-100002"},
+        "roles": [{"role": "student", "roleType": "primary"}]
+      }
+    },
+    {
+      "id": "evt_003",
+      "created_date": "2026-05-19T10:00:02+00:00",
+      "type": "person.created",
+      "data": {
+        "sourcedId": "stu-003",
+        "status": "active",
+        "givenName": "Carmen",
+        "familyName": "Vega",
+        "grades": ["05"],
+        "preferredFirstName": null,
+        "primaryOrg": {"sourcedId": "sch-001", "type": "org"},
+        "userIds": {"sis": "100003", "edlink": "edl-100003"},
+        "roles": [{"role": "student", "roleType": "primary"}]
+      }
+    },
+    {
+      "id": "evt_004",
+      "created_date": "2026-05-19T10:00:03+00:00",
+      "type": "enrollment.created",
+      "data": {
+        "sourcedId": "enr-001",
+        "user": {"sourcedId": "stu-001", "type": "user"},
+        "class": {"sourcedId": "cls-A", "type": "class"},
+        "beginDate": "2026-08-15",
+        "endDate": "2027-06-12",
+        "primary": true
+      }
+    },
+    {
+      "id": "evt_005",
+      "created_date": "2026-05-19T10:00:04+00:00",
+      "type": "enrollment.created",
+      "data": {
+        "sourcedId": "enr-002",
+        "user": {"sourcedId": "stu-002", "type": "user"},
+        "class": {"sourcedId": "cls-A", "type": "class"},
+        "beginDate": "2026-08-15",
+        "endDate": "2027-06-12",
+        "primary": true
+      }
+    },
+    {
+      "id": "evt_006",
+      "created_date": "2026-05-19T10:00:05+00:00",
+      "type": "enrollment.created",
+      "data": {
+        "sourcedId": "enr-003",
+        "user": {"sourcedId": "stu-003", "type": "user"},
+        "class": {"sourcedId": "cls-B", "type": "class"},
+        "beginDate": "2026-08-15",
+        "endDate": "2027-06-12",
+        "primary": true
+      }
+    },
+    {
+      "id": "evt_007",
+      "created_date": "2026-05-20T09:00:00+00:00",
+      "type": "person.updated",
+      "data": {
+        "sourcedId": "stu-001",
+        "status": "active",
+        "givenName": "Alex",
+        "familyName": "Morgan",
+        "grades": ["06"],
+        "preferredFirstName": null,
+        "primaryOrg": {"sourcedId": "sch-001", "type": "org"},
+        "userIds": {"sis": "100001", "edlink": "edl-100001"},
+        "roles": [{"role": "student", "roleType": "primary"}]
+      }
+    },
+    {
+      "id": "evt_008",
+      "created_date": "2026-05-20T09:00:01+00:00",
+      "type": "person.deleted",
+      "data": {
+        "sourcedId": "stu-003",
+        "status": "tobedeleted",
+        "givenName": "Carmen",
+        "familyName": "Vega",
+        "grades": ["05"],
+        "preferredFirstName": null,
+        "primaryOrg": {"sourcedId": "sch-001", "type": "org"},
+        "userIds": {"sis": "100003", "edlink": "edl-100003"},
+        "roles": [{"role": "student", "roleType": "primary"}]
+      }
+    }
+  ]
+}

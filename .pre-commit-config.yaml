@@ -1,0 +1,38 @@
+# Pre-commit hooks for the EdLink rostering repo.
+#
+# Install once per clone:
+#   pre-commit install
+#
+# Then ruff, mypy, and the copy-style checks run automatically on `git commit`.
+# CI runs the same hooks against the full repo so local-vs-CI drift stays zero.
+
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(edlink_rostering|tests)/
+      - id: ruff-format
+        files: ^(edlink_rostering|tests)/
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: bash -c 'python -m mypy edlink_rostering'
+        language: system
+        types: [python]
+        pass_filenames: false
+        files: ^edlink_rostering/
+
+      - id: copy-style-em-dash
+        # Per .claude/rules/copy-style.md: em-dashes and en-dashes are
+        # non-negotiable AI-tells. Strip them at the gate.
+        name: copy-style (no em-dash, no en-dash)
+        entry: bash -c 'if grep -nP "[\xe2\x80\x93\xe2\x80\x94]" "$@"; then echo; echo "Em-dash or en-dash detected. Use a comma, period, or parentheses (per .claude/rules/copy-style.md)."; exit 1; fi' --
+        language: system
+        types_or: [markdown, plain-text, text]
+        exclude: ^(edlink_rostering/infrastructure/db/models\.py|var/|web/node_modules/)

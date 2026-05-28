@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+htmlcov/
+.coverage
+.mypy_cache/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+!.idea/runConfigurations/
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Project
+var/
+
+# Private notes (never committed to the public repo). Local context,
+# customer-specific handoff state, off-repo planning files, anything
+# that should not ship with the OSS distribution belongs here, not in
+# docs/.
+.private/

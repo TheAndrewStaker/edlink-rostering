@@ -1,0 +1,13 @@
+{
+  "scenario_id": "l3_parse_invalid_date",
+  "label": "L3: Parse failure (bad date)",
+  "section": "validation",
+  "kind": "l3_failure",
+  "description": "Simulates an enrollment whose beginDate is not ISO-8601. The bad event is rejected; the page commits the rest. Per-event Layer 3 error visible in sync detail.",
+  "data": {
+    "code": "PARSE_INVALID_DATE",
+    "event_id": "evt_test_l3",
+    "field": "beginDate",
+    "raw_value": "20260815"
+  }
+}

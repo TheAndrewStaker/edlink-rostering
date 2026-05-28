@@ -1,0 +1,12 @@
+{
+  "scenario_id": "reconciliation_drift",
+  "label": "Reconciliation drift",
+  "section": "other",
+  "kind": "reconciliation_drift",
+  "description": "Forces a canonical and partner divergence. The drift section populates; reconciliation_drift alert fires; the operator can investigate per entity type.",
+  "data": {
+    "entity_type": "students",
+    "canonical_only_ids": ["stu-canonical-only-1", "stu-canonical-only-2"],
+    "partner_only_ids": ["stu-partner-only-9"]
+  }
+}

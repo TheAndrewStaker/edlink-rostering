@@ -1,0 +1,18 @@
+{
+  "name": "@edlink-rostering/admin-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Playwright end-to-end suite for the admin app. Drives the real Vite frontend against the real FastAPI backend and Postgres; per-spec DB reset via scripts/dev-reset.sh.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test",
+    "test:debug": "playwright test --debug",
+    "show-report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

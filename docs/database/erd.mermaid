@@ -1,0 +1,234 @@
+erDiagram
+    leas ||--o{ students : "has many"
+    leas ||--o{ enrollments : "has many"
+    students ||--o{ enrollments : "enrolled in"
+
+    sync_jobs ||--o{ lea_snapshots : "generation_id"
+    sync_jobs ||--o{ lea_snapshots : "superseded_by"
+    sync_jobs ||--o{ student_snapshots : "generation_id"
+    sync_jobs ||--o{ student_snapshots : "superseded_by"
+    sync_jobs ||--o{ enrollment_snapshots : "generation_id"
+    sync_jobs ||--o{ enrollment_snapshots : "superseded_by"
+
+    sync_jobs ||--o{ sync_validation_results : "audited by"
+    sync_jobs ||--o{ revert_actions : "reverted by"
+    sync_jobs ||--o{ retry_actions : "retried by"
+    sync_jobs ||--o{ quarantine : "quarantined by"
+
+    leas {
+        varchar id PK
+        varchar name
+        varchar lea_type "LeaType: traditional_district|charter_lea|charter_cmo|boces|state_agency"
+        varchar(2) state "USPS"
+        varchar nces_lea_id "nullable"
+        varchar status "onboarding|active|decommissioned (V0009); indexed; default 'onboarding'"
+        varchar timezone "IANA timezone (V0009); default 'America/New_York'"
+        varchar edlink_integration_id "EdLink integration id (V0009); nullable; unique"
+        timestamptz deleted_at "soft-delete; nullable"
+    }
+
+    students {
+        varchar id PK
+        varchar lea_id FK "to leas.id; indexed"
+        varchar given_name
+        varchar family_name
+        varchar grade "OneRoster grade string; nullable"
+        varchar preferred_first_name "nullable"
+        varchar primary_school_id "nullable"
+        jsonb external_ids "default {}; SIS + partner IDs"
+        timestamptz deleted_at "soft-delete; nullable"
+    }
+
+    enrollments {
+        varchar id PK
+        varchar lea_id FK "to leas.id; indexed"
+        varchar student_id FK "to students.id; indexed"
+        varchar class_id "canonical ClassId NewType pending"
+        date begin_date
+        date end_date "nullable; NULL = active"
+        timestamptz deleted_at "soft-delete; nullable"
+    }
+
+    lea_snapshots {
+        uuid snapshot_id PK
+        varchar lea_id "natural key; indexed"
+        uuid generation_id FK "to sync_jobs.id; indexed"
+        uuid superseded_by_generation_id FK "to sync_jobs.id; nullable; indexed"
+        timestamptz superseded_at "nullable"
+        boolean deleted_upstream "default false"
+        varchar source_event_id "high-water mark for replay dedup; nullable; indexed (V0002)"
+        timestamptz source_event_at "partner created_date; nullable (V0002)"
+        timestamptz created_at
+        jsonb payload "full canonical entity payload"
+    }
+
+    student_snapshots {
+        uuid snapshot_id PK
+        varchar student_id "natural key; indexed"
+        varchar lea_id "tenant scope; indexed"
+        uuid generation_id FK "to sync_jobs.id; indexed"
+        uuid superseded_by_generation_id FK "to sync_jobs.id; nullable; indexed"
+        timestamptz superseded_at "nullable"
+        boolean deleted_upstream "default false"
+        varchar source_event_id "high-water mark for replay dedup; nullable; indexed (V0002)"
+        timestamptz source_event_at "partner created_date; nullable (V0002)"
+        timestamptz created_at
+        jsonb payload "full canonical entity payload"
+    }
+
+    enrollment_snapshots {
+        uuid snapshot_id PK
+        varchar enrollment_id "natural key; indexed"
+        varchar lea_id "tenant scope; indexed"
+        uuid generation_id FK "to sync_jobs.id; indexed"
+        uuid superseded_by_generation_id FK "to sync_jobs.id; nullable; indexed"
+        timestamptz superseded_at "nullable"
+        boolean deleted_upstream "default false"
+        varchar source_event_id "high-water mark for replay dedup; nullable; indexed (V0002)"
+        timestamptz source_event_at "partner created_date; nullable (V0002)"
+        timestamptz created_at
+        jsonb payload "full canonical entity payload"
+    }
+
+    sync_jobs {
+        uuid id PK
+        varchar lea_id "tenant scope; indexed"
+        varchar partner "edlink|ednition|..."
+        varchar status "running|success|failed|revert; indexed"
+        timestamptz started_at
+        timestamptz completed_at "nullable"
+        integer event_count "default 0"
+        integer error_count "default 0"
+        integer warning_count "default 0"
+        varchar cursor_before "nullable"
+        varchar cursor_after "nullable"
+        varchar partner_checksum "nullable; Merkle session 3"
+        varchar canonical_checksum "nullable; Merkle session 3"
+        boolean checksum_match "nullable; Merkle session 3"
+        text error_summary "nullable; short blocking-issue list"
+    }
+
+    sync_validation_results {
+        uuid id PK
+        uuid sync_job_id FK "to sync_jobs.id; indexed"
+        integer layer "1..5"
+        varchar code "stable identifier"
+        varchar payload_reference "nullable; event_id when per-event"
+        jsonb detail "issue context including severity"
+        timestamptz created_at
+    }
+
+    revert_actions {
+        uuid id PK
+        uuid sync_job_id FK "to sync_jobs.id; indexed; the sync_job that was reverted"
+        uuid revert_generation_id "synthetic sync_jobs row of status=revert"
+        varchar operator_identity "JWT sub or CLI operator"
+        text reason "free-text justification"
+        timestamptz reverted_at
+        integer snapshots_restored "default 0; 0 means idempotent no-op"
+    }
+
+    retry_actions {
+        uuid id PK
+        uuid sync_job_id FK "to sync_jobs.id; indexed; the sync_job that was retried"
+        varchar lea_id "tenant scope; indexed"
+        varchar partner "edlink|ednition|..."
+        varchar operator_identity "JWT sub or CLI operator"
+        text reason "free-text justification"
+        timestamptz retried_at
+        varchar cursor_rewound_to "nullable; cursor value the LEA was rewound to"
+        boolean forced "default false; true when --force used on non-failed sync"
+    }
+
+    quarantine {
+        uuid id PK
+        uuid sync_job_id FK "to sync_jobs.id; indexed"
+        varchar lea_id "tenant scope; indexed"
+        varchar entity_type "lea|student|enrollment"
+        varchar entity_id "natural key of the orphaned entity"
+        text reason "Layer 4 referential violation note"
+        jsonb raw_payload "original event payload for re-release"
+        timestamptz created_at
+        timestamptz resolved_at "nullable"
+        varchar resolution_status "nullable; released|rejected"
+        varchar resolution_operator "nullable; JWT sub"
+    }
+
+    cursor_state {
+        varchar lea_id PK "composite PK part 1"
+        varchar partner PK "composite PK part 2"
+        varchar last_event_id "nullable"
+        timestamptz last_event_at "nullable; cursor-lag query feeds 20-day alert"
+        timestamptz last_poll_at "nullable"
+        boolean cold_start_required "default false; triggered when cursor passes 30-day retention"
+        timestamptz updated_at
+    }
+
+    operator ||--o{ operator_role : "granted to"
+    operator ||--o{ operator_role : "granted by"
+    operator ||--o{ connector_authorization : "authorized by"
+    operator ||--o{ audit_log : "performed by"
+    leas ||--o{ connector_authorization : "per LEA"
+    leas ||--o{ audit_log : "scoped to (nullable)"
+
+    operator {
+        uuid id PK
+        text subject "IdP sub claim; unique"
+        text display_name
+        text email "unique via functional index on lower(email)"
+        text status "active|disabled|locked"
+        timestamptz created_at "default now()"
+        timestamptz last_seen_at "nullable; updated on each authenticated request"
+    }
+
+    operator_role {
+        uuid id PK
+        uuid operator_id FK "to operator.id"
+        text role "operator|admin|owner|auditor"
+        timestamptz granted_at "default now()"
+        uuid granted_by FK "to operator.id; bootstrap row references itself"
+        timestamptz revoked_at "nullable; partial unique on (operator_id) WHERE revoked_at IS NULL"
+        uuid revoked_by FK "to operator.id; nullable"
+        text reason
+    }
+
+    connector_authorization {
+        uuid id PK
+        varchar lea_id FK "to leas.id"
+        text partner "edlink|ednition|..."
+        text status "pending|active|revoked|locked; default pending"
+        timestamptz authorized_at "nullable"
+        uuid authorized_by FK "to operator.id; nullable"
+        timestamptz revoked_at "nullable"
+        uuid revoked_by FK "to operator.id; nullable"
+        text secret_ref "Key Vault secret name; value never in PG"
+        integer poll_interval_seconds "default 300"
+        text notes "nullable"
+    }
+
+    audit_log {
+        uuid id PK
+        uuid operator_id FK "to operator.id"
+        text action "stable code, e.g. operator.role_granted"
+        text target_kind "operator|lea|connector_authorization"
+        text target_id "uuid or LEA id"
+        varchar lea_id FK "to leas.id; nullable for LEA-scoped reads"
+        text reason
+        jsonb detail "nullable; structured action context"
+        timestamptz created_at "default now()"
+    }
+
+    operator ||--o{ operator_lea_grant : "granted to"
+    operator ||--o{ operator_lea_grant : "granted by"
+    leas ||--o{ operator_lea_grant : "scopes operator"
+
+    operator_lea_grant {
+        uuid id PK
+        uuid operator_id FK "to operator.id; indexed"
+        varchar lea_id FK "to leas.id; indexed"
+        timestamptz granted_at "default now()"
+        uuid granted_by FK "to operator.id"
+        timestamptz revoked_at "nullable; partial unique on (operator_id, lea_id) WHERE revoked_at IS NULL"
+        uuid revoked_by FK "to operator.id; nullable"
+        text reason
+    }

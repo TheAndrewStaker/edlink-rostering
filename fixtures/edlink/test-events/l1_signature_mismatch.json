@@ -1,0 +1,14 @@
+{
+  "scenario_id": "l1_signature_mismatch",
+  "label": "L1: Partner signature mismatch",
+  "section": "validation",
+  "kind": "l1_failure",
+  "description": "Simulates an EdLink response whose HMAC signature does not match the body. Sync fails at the connector boundary before any events are read.",
+  "data": {
+    "code": "HTTP_INTEGRITY_FAILED",
+    "http_status": 200,
+    "error": "Computed HMAC does not match X-Edlink-Signature header.",
+    "alert_code": "alert.sync_failure",
+    "alert_severity": "critical"
+  }
+}

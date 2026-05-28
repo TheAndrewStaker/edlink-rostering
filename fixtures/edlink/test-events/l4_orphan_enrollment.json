@@ -1,0 +1,12 @@
+{
+  "scenario_id": "l4_orphan_enrollment",
+  "label": "L4: Orphan enrollment",
+  "section": "validation",
+  "kind": "l4_orphan",
+  "description": "Simulates an enrollment referencing a student that does not exist anywhere. The enrollment lands in quarantine; the rest of the batch commits. Operator can release or reject from the queue.",
+  "data": {
+    "code": "ENROLLMENT_ORPHAN_STUDENT",
+    "enrollment_id_prefix": "enr-test-orph",
+    "missing_student_id": "stu-MISSING"
+  }
+}
