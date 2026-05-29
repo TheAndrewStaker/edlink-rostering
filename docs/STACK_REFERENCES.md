@@ -106,7 +106,7 @@ When agents are reasoning about library APIs:
 
 | Component | Current | Notes |
 |---|---|---|
-| Cloud provider | Microsoft Azure | Existing Journify platform (Q-009 / Q-011 confirmed). |
+| Cloud provider | Microsoft Azure | Confirmed (Q-009 / Q-011). |
 | Compute | Azure Functions (Flex Consumption) for workers; Azure App Service for the FastAPI admin API | Flex Consumption is scale-to-zero, VNet-integrated, with no enforced execution timeout. One plan hosts the poll timer, reconciliation timer, sync session-trigger, and the Data Feeds webhook HTTP-trigger. |
 | Messaging | Azure Service Bus Standard, sessions on (`session_id=lea_id`) | Sessions and duplicate detection ship on Standard; Premium only for private endpoints, geo-replication, or messages over 256 KB. Resolves Q-019. |
 | Database | Azure Database for PostgreSQL Flexible Server, zone-redundant HA from day one (General Purpose tier floor) | Burstable cannot do HA. |
