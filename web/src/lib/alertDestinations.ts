@@ -10,7 +10,7 @@
  *
  * Integration-degraded alerts land on the Integrations page. That is
  * where the operator acts via the row's lifecycle dropdown (Authorize
- * / Rotate / Adjust poll interval). The page parses `?lea=<id>` as a
+ * / Revoke / Adjust poll interval). The page parses `?lea=<id>` as a
  * filter and shows the matching row.
  *
  * Platform-level alerts (`alert.retention_policy_drift`,

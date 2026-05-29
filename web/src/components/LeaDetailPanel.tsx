@@ -415,7 +415,7 @@ function CursorRow({ row }: { row: CursorStateRow }) {
       borderRadius="md"
       title={
         row.last_event_id
-          ? `Cursor position: ${row.last_event_id}`
+          ? `Cursor position (EdLink event ID): ${row.last_event_id}`
           : undefined
       }
     >
@@ -445,14 +445,14 @@ function CursorRow({ row }: { row: CursorStateRow }) {
  * with ``revoked_at IS NULL``. Surfaces what's relevant when an
  * operator is on the LEA drawer triaging an issue: partner,
  * authorization status, EdLink-side integration status, sharing
- * scope, masked secret_ref, poll interval, who authorized it, when
+ * scope, EdLink integration id, poll interval, who authorized it, when
  * the integration status was last observed.
  *
- * Mutations (rotate / revoke / adjust / re-authorize) deliberately
- * live on the Integrations page rather than here. The LEA can have
- * multiple partners in the future; a single "Rotate credential" on
- * the LEA drawer would be ambiguous. "Manage" deep-links to the
- * filtered Integrations view so the operator stays in flow.
+ * Mutations (revoke / adjust / re-authorize) deliberately live on the
+ * Integrations page rather than here. The LEA can have multiple
+ * partners in the future; a single lifecycle action on the LEA drawer
+ * would be ambiguous. "Manage" deep-links to the filtered Integrations
+ * view so the operator stays in flow.
  */
 function IntegrationSection({ leaId }: { leaId: string }) {
   const { data, isLoading } = useQuery({
@@ -572,10 +572,14 @@ function IntegrationCard({ row }: { row: ConnectorAuthorizationOut }) {
           value={formatPollInterval(row.poll_interval_seconds)}
         />
         <IntegrationMetaRow
-          label="Secret ref"
-          value={compactIntegrationSecret(row.secret_ref)}
+          label="Integration ID"
+          value={
+            row.edlink_integration_id
+              ? compactIntegrationId(row.edlink_integration_id)
+              : "—"
+          }
           mono
-          title={row.secret_ref}
+          title={row.edlink_integration_id ?? undefined}
         />
         <IntegrationMetaRow
           label="Authorized by"
@@ -620,7 +624,7 @@ function IntegrationMetaRow({
   );
 }
 
-function compactIntegrationSecret(value: string): string {
+function compactIntegrationId(value: string): string {
   if (value.length <= 28) return value;
   return `${value.slice(0, 16)}…${value.slice(-8)}`;
 }
@@ -667,7 +671,7 @@ function SyncsSection({
                 Events
               </Table.ColumnHeader>
               <Table.ColumnHeader
-                title="Where the partner event cursor sat before this sync, and where it moved to after. Retry rewinds to the before-cursor; Revert undoes snapshots written between the two."
+                title="Where the partner event cursor sat before this sync, and where it moved to after. Values are EdLink event IDs. Retry rewinds to the before-cursor; Revert undoes snapshots written between the two."
               >
                 Cursor →
               </Table.ColumnHeader>
@@ -887,12 +891,12 @@ function SyncMetadataBlock({ sync }: { sync: SyncJobSummary }) {
         <MetadataRow label="Errors" value={String(sync.error_count)} />
         <MetadataRow label="Warnings" value={String(sync.warning_count)} />
         <MetadataRow
-          label="Cursor before"
+          label="Cursor before (EdLink event ID)"
           value={sync.cursor_before ?? "—"}
           mono
         />
         <MetadataRow
-          label="Cursor after"
+          label="Cursor after (EdLink event ID)"
           value={sync.cursor_after ?? "—"}
           mono
         />
@@ -1113,7 +1117,7 @@ function CursorTransition({
   after: string | null;
 }) {
   const tooltipText =
-    `Before: ${before ?? "(empty)"}\nAfter: ${after ?? "(empty)"}`;
+    `EdLink event ID before: ${before ?? "(empty)"}\nafter: ${after ?? "(empty)"}. The sync processed every event between them.`;
   return (
     <HStack
       gap={1.5}

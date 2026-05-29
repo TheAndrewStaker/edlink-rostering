@@ -72,6 +72,8 @@ def cache_key(self) -> str:
 
 Tokens are encrypted at rest in the cache. **Never log token values.**
 
+**EdLink is a provider-specific exception to the per-LEA token-exchange model.** EdLink owns each district's access token; we hold one application secret and fetch a district's token on demand keyed by its stable `integration_id` (`GET /api/v1/integrations`). Store `integration_id` per LEA, not a per-LEA secret we name or rotate. There is no per-LEA "rotate credential" operator flow; the only EdLink secret we rotate is the single application secret. Full model and reference URLs are in `docs/concepts/auth-patterns.md` ("EdLink integration access tokens"). Do not build per-LEA EdLink secret management against the generic pattern above.
+
 ## Idempotency on writes
 
 Every write operation carries an idempotency key. Partners that support idempotency get it as a header; partners that don't get the key included in the payload (where the API allows custom fields).

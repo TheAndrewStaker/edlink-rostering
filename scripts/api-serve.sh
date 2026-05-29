@@ -28,4 +28,12 @@ if [[ -n "${owner_pid}" ]]; then
   exit 1
 fi
 
-python -m edlink_rostering.api --host 127.0.0.1 --port "${PORT_API}" "$@"
+# Tee stdout+stderr to a durable log so the request log and any
+# unhandled-exception traceback survive after the serving terminal
+# scrolls. scripts/api-logs.sh tails this file. Unhandled 500s are also
+# captured structurally by the telemetry FileSink at
+# var/logs/app_insights.jsonl (see the catch-all handler in
+# edlink_rostering/api/errors.py).
+mkdir -p var/logs
+python -m edlink_rostering.api --host 127.0.0.1 --port "${PORT_API}" "$@" 2>&1 \
+  | tee -a var/logs/api.log

@@ -13,16 +13,12 @@ Coverage:
   * auditor passes (read-only role)
 - authorize:
   * admin authorizes a pending row → active + audit_log
-  * 422 when the staged secret is missing from Key Vault
   * idempotent on already-active row
   * operator role gets 403 (action endpoints exclude operator)
   * empty reason gets 422 (Pydantic min_length=1)
 - revoke:
   * marks revoked_at, writes audit_log
   * 404 when no live row
-- rotate-credential:
-  * updates secret_ref, writes audit_log with prior + new
-  * 422 when new secret not staged
 - adjust-poll-interval:
   * updates poll_interval_seconds, writes audit_log
   * 422 when interval out of [60, 3600] range
@@ -32,7 +28,6 @@ from __future__ import annotations
 
 import os
 import uuid
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -42,9 +37,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from edlink_rostering.api import app as fastapi_app
-from edlink_rostering.api.dependencies import get_key_vault
 from edlink_rostering.core.types import LeaId
-from edlink_rostering.infrastructure.azure_mocks import KeyVaultClient
 from tests.conftest import wipe_lea
 from tests.fixtures.auth import auth_header, ensure_test_secret, mint_jwt
 
@@ -63,27 +56,7 @@ _TEST_PARTNER = "edlink"
 
 
 @pytest.fixture
-def staged_vault() -> Iterator[KeyVaultClient]:
-    """A KeyVaultClient with the test secrets pre-staged.
-
-    Overrides ``get_key_vault`` for the lifetime of the test so the
-    process-wide lru_cache does not leak staged values into other
-    tests.
-    """
-
-    vault = KeyVaultClient()
-    vault.put_secret(f"edlink-token-{_TEST_LEA_A}", "bearer-A")
-    vault.put_secret(f"edlink-token-{_TEST_LEA_B}", "bearer-B")
-    vault.put_secret("edlink-token-rotated", "bearer-rotated")
-    fastapi_app.dependency_overrides[get_key_vault] = lambda: vault
-    try:
-        yield vault
-    finally:
-        fastapi_app.dependency_overrides.pop(get_key_vault, None)
-
-
-@pytest.fixture
-def client(staged_vault: KeyVaultClient) -> TestClient:
+def client() -> TestClient:
     return TestClient(fastapi_app)
 
 
@@ -272,7 +245,6 @@ async def test_list_connectors_as_admin_returns_all(
             client.post(
                 f"/api/v1/connectors/{lea}/{_TEST_PARTNER}/authorize",
                 json={
-                    "secret_ref": f"edlink-token-{lea}",
                     "reason": "seed for list test",
                 },
                 headers=header,
@@ -309,7 +281,6 @@ async def test_list_connectors_as_operator_scoped_to_one_lea(
             client.post(
                 f"/api/v1/connectors/{lea}/{_TEST_PARTNER}/authorize",
                 json={
-                    "secret_ref": f"edlink-token-{lea}",
                     "reason": "seed for scope test",
                 },
                 headers=admin_header,
@@ -350,7 +321,6 @@ async def test_authorize_writes_audit_log(
         resp = client.post(
             f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
             json={
-                "secret_ref": f"edlink-token-{_TEST_LEA_A}",
                 "reason": "initial authorize",
             },
             headers=header,
@@ -382,31 +352,6 @@ async def test_authorize_writes_audit_log(
 
 
 @pytest.mark.asyncio
-async def test_authorize_missing_secret_returns_422(
-    client: TestClient,
-    db_session_factory: async_sessionmaker[Any],
-    seeded_test_leas: Any,
-) -> None:
-    subject = "test-conn-missing-secret"
-    _, header = await _seed_operator(
-        db_session_factory, subject=subject, role="admin"
-    )
-    try:
-        resp = client.post(
-            f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
-            json={
-                "secret_ref": "edlink-token-not-staged",
-                "reason": "should fail",
-            },
-            headers=header,
-        )
-        assert resp.status_code == 422
-        assert "not staged" in resp.text
-    finally:
-        await _cleanup_operator(db_session_factory, subject)
-
-
-@pytest.mark.asyncio
 async def test_authorize_operator_role_gets_403(
     client: TestClient,
     db_session_factory: async_sessionmaker[Any],
@@ -423,7 +368,6 @@ async def test_authorize_operator_role_gets_403(
         resp = client.post(
             f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
             json={
-                "secret_ref": f"edlink-token-{_TEST_LEA_A}",
                 "reason": "operator should not be able to do this",
             },
             headers=header,
@@ -447,7 +391,6 @@ async def test_authorize_empty_reason_rejected(
         resp = client.post(
             f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
             json={
-                "secret_ref": f"edlink-token-{_TEST_LEA_A}",
                 "reason": "",
             },
             headers=header,
@@ -474,7 +417,6 @@ async def test_revoke_marks_revoked_at_and_audits(
         client.post(
             f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
             json={
-                "secret_ref": f"edlink-token-{_TEST_LEA_A}",
                 "reason": "set up for revoke",
             },
             headers=header,
@@ -542,88 +484,6 @@ async def test_revoke_no_live_row_returns_404(
         await _cleanup_operator(db_session_factory, subject)
 
 
-# ── Rotate credential ─────────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_rotate_credential_updates_secret_ref(
-    client: TestClient,
-    db_session_factory: async_sessionmaker[Any],
-    seeded_test_leas: Any,
-) -> None:
-    subject = "test-conn-rotate"
-    op_id, header = await _seed_operator(
-        db_session_factory, subject=subject, role="admin"
-    )
-    try:
-        client.post(
-            f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
-            json={
-                "secret_ref": f"edlink-token-{_TEST_LEA_A}",
-                "reason": "set up for rotate",
-            },
-            headers=header,
-        )
-        resp = client.post(
-            f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/rotate-credential",
-            json={
-                "new_secret_ref": "edlink-token-rotated",
-                "reason": "annual rotation",
-            },
-            headers=header,
-        )
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["new_secret_ref"] == "edlink-token-rotated"
-        assert body["previous_secret_ref"] == f"edlink-token-{_TEST_LEA_A}"
-
-        async with db_session_factory() as session:
-            row = (
-                await session.execute(
-                    text(
-                        "SELECT secret_ref FROM connector_authorization"
-                        " WHERE id = :id"
-                    ),
-                    {"id": body["id"]},
-                )
-            ).one()
-        assert row.secret_ref == "edlink-token-rotated"
-    finally:
-        await _cleanup_operator(db_session_factory, subject)
-
-
-@pytest.mark.asyncio
-async def test_rotate_credential_missing_secret_returns_422(
-    client: TestClient,
-    db_session_factory: async_sessionmaker[Any],
-    seeded_test_leas: Any,
-) -> None:
-    subject = "test-conn-rotate-missing"
-    _, header = await _seed_operator(
-        db_session_factory, subject=subject, role="admin"
-    )
-    try:
-        client.post(
-            f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
-            json={
-                "secret_ref": f"edlink-token-{_TEST_LEA_A}",
-                "reason": "set up for rotate",
-            },
-            headers=header,
-        )
-        resp = client.post(
-            f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/rotate-credential",
-            json={
-                "new_secret_ref": "edlink-token-never-staged",
-                "reason": "should fail",
-            },
-            headers=header,
-        )
-        assert resp.status_code == 422
-    finally:
-        await _cleanup_operator(db_session_factory, subject)
-
-
 # ── Adjust poll interval ──────────────────────────────────────────────────────
 
 
@@ -641,7 +501,6 @@ async def test_adjust_poll_interval_updates_value(
         client.post(
             f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
             json={
-                "secret_ref": f"edlink-token-{_TEST_LEA_A}",
                 "reason": "set up for adjust",
             },
             headers=header,
@@ -676,7 +535,6 @@ async def test_adjust_poll_interval_out_of_range_rejected(
         client.post(
             f"/api/v1/connectors/{_TEST_LEA_A}/{_TEST_PARTNER}/authorize",
             json={
-                "secret_ref": f"edlink-token-{_TEST_LEA_A}",
                 "reason": "set up",
             },
             headers=header,

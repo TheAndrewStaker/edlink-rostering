@@ -62,8 +62,8 @@ per pathway. Display-only interactions do not get specs.
 
 Current inventory:
 
-- `ConnectorActions` authorize, revoke, rotate, adjust-poll-interval.
-  Four pathways.
+- `ConnectorActions` authorize, revoke, adjust-poll-interval. Three
+  pathways.
 - `ReasonDialog` quarantine release with reason. One pathway.
 - `SendTestEventMenu` happy scenario. The L1 through L5 + drift
   scenarios are the error fixtures; one spec per error layer covers them.

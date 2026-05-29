@@ -201,7 +201,6 @@ erDiagram
         uuid authorized_by FK "to operator.id; nullable"
         timestamptz revoked_at "nullable"
         uuid revoked_by FK "to operator.id; nullable"
-        text secret_ref "Key Vault secret name; value never in PG"
         integer poll_interval_seconds "default 300"
         text notes "nullable"
     }

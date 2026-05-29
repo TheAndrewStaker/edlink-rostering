@@ -90,6 +90,7 @@ export interface LeaSummary {
   latest_sync_status: string | null;
   cursor_lag_days: number | null;
   in_flight_count: number;
+  status?: string;
 }
 
 export interface TestEventScenario {
@@ -236,7 +237,7 @@ export interface ConnectorAuthorizationOut {
   authorized_by_email: string | null;
   revoked_at: string | null;
   revoked_by_email: string | null;
-  secret_ref: string;
+  edlink_integration_id: string | null;
   poll_interval_seconds: number;
   notes: string | null;
   integration_status: string;
@@ -254,7 +255,6 @@ export interface ConnectorAuthorizeResponse {
   lea_id: string;
   partner: string;
   status: string;
-  secret_ref: string;
   poll_interval_seconds: number;
   created_new_row: boolean;
 }
@@ -264,14 +264,6 @@ export interface ConnectorRevokeResponse {
   lea_id: string;
   partner: string;
   revoked_at: string;
-}
-
-export interface ConnectorRotateCredentialResponse {
-  id: string;
-  lea_id: string;
-  partner: string;
-  previous_secret_ref: string;
-  new_secret_ref: string;
 }
 
 export interface ConnectorAdjustPollIntervalResponse {
@@ -431,7 +423,6 @@ export const api = {
     lea_id: string,
     partner: string,
     body: {
-      secret_ref: string;
       reason: string;
       poll_interval_seconds?: number;
       notes?: string;
@@ -445,19 +436,6 @@ export const api = {
     request<ConnectorRevokeResponse>(
       `/api/v1/connectors/${encodeURIComponent(lea_id)}/${encodeURIComponent(partner)}/revoke`,
       { method: "POST", body: JSON.stringify({ reason }) },
-    ),
-  rotateConnectorCredential: (
-    lea_id: string,
-    partner: string,
-    new_secret_ref: string,
-    reason: string,
-  ) =>
-    request<ConnectorRotateCredentialResponse>(
-      `/api/v1/connectors/${encodeURIComponent(lea_id)}/${encodeURIComponent(partner)}/rotate-credential`,
-      {
-        method: "POST",
-        body: JSON.stringify({ new_secret_ref, reason }),
-      },
     ),
   adjustConnectorPollInterval: (
     lea_id: string,

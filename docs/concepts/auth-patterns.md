@@ -28,6 +28,35 @@ The default B2B auth pattern. Used by the vast majority of EdTech integration pa
 - Rotate `client_secret` annually or on suspected compromise.
 
 
+## EdLink integration access tokens (provider-specific)
+
+EdLink does not fit the generic per-LEA `client_credentials` shape above, and getting this wrong leads to building per-district secret management we do not need. Verified 2026-05-28 against EdLink's own docs.
+
+**The model.** EdLink is the system of record for each district's access token. We hold exactly one long-lived secret (the **application secret**). Each connected district is an "integration" with a stable `integration_id`. To get a district's token:
+
+1. `GET https://ed.link/api/v1/integrations` with the application secret as the bearer.
+2. The response lists one object per district: stable `id` (the `integration_id`), `access_token`, `status`, `source`, `provider`, timestamps.
+3. Select the row by `integration_id`, use its `access_token` against the Graph API.
+
+The `access_token` is documented as stable, has no documented expiry, and is re-fetchable on demand. EdLink recommends storing the `integration_id` alongside the org record.
+
+**What this means for the connector:**
+- Store `integration_id` per LEA (non-secret, plaintext column). Do **not** stage, name, version, or rotate a per-LEA secret.
+- Fetch the access token from EdLink keyed by `integration_id`; cache in memory for the poll cadence (~5 min), invalidate on 401. An optional in-place Key Vault cache under a deterministic app-derived name (`edlink-token-<lea_id>`) is a performance choice, never operator-named.
+- The only EdLink secret we rotate is the single application secret. There is no per-LEA "rotate credential" operator flow.
+- Onboarding writes `integration_id` automatically via the redirect callback. No human ever pastes or names a token.
+
+This refines the "cache key is `(partner, lea_id)`" note above: for EdLink the cached value is fetched by `integration_id`, not minted by a per-LEA token exchange.
+
+**Reference URLs (cite with verification date when locking a wire-format choice):**
+- Configuring integrations via API: https://ed.link/docs/guides/v2.0/integration-management/configuring-integrations-via-api
+- Integrations API reference: https://ed.link/docs/api/v2.0/integrations/overview
+- Creating an onboarding (dashboard): https://ed.link/docs/dashboard/onboardings/creating-an-onboarding
+- Custom onboarding flows: https://ed.link/docs/guides/v2.0/onboarding-schools/custom-onboarding-flows
+- Authentication (SSO + OAuth2, 3600s bearer): https://ed.link/docs/guides/v2.0/sso/getting-started-with-sso
+
+**Verify against EdLink's current API before locking the connector auth path:** whether the integration access token can expire or be force-rotated server-side, the `GET /integrations` rate limit, and token-field behavior on district revocation. Confirm with EdLink, then record the answers here with the verification date.
+
 ## OAuth 2.0 Client Credentials with JWT client assertion (private_key_jwt)
 
 Higher-security variant. The client signs a JWT with its private key instead of sending a shared secret. The server verifies with the registered public key.

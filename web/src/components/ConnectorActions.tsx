@@ -23,7 +23,6 @@ import {
   Button,
   Field,
   HStack,
-  Input,
   Slider,
   Stack,
   Text,
@@ -46,7 +45,6 @@ function subtitleFor(row: ConnectorAuthorizationOut): string {
 // ── Authorize ──────────────────────────────────────────────────────────────
 
 export interface AuthorizeInput {
-  secret_ref: string;
   reason: string;
   poll_interval_seconds: number;
 }
@@ -68,36 +66,25 @@ function AuthorizeBody({
   row: ConnectorAuthorizationOut;
   ctx: ManagedDialogContext<AuthorizeInput>;
 }) {
-  const [secretRef, setSecretRef] = useState(row.secret_ref);
   const [reason, setReason] = useState("");
   const [pollInterval, setPollInterval] = useState<number>(
     row.poll_interval_seconds,
   );
 
   useEffect(() => {
-    setSecretRef(row.secret_ref);
     setReason("");
     setPollInterval(row.poll_interval_seconds);
-  }, [row.id, row.secret_ref, row.poll_interval_seconds]);
+  }, [row.id, row.poll_interval_seconds]);
 
-  const valid = secretRef.trim().length > 0 && reason.trim().length > 0;
+  const valid = reason.trim().length > 0;
 
   return (
     <Stack gap={4}>
-      <Field.Root required>
-        <Field.Label>Key Vault secret name</Field.Label>
-        <Input
-          autoFocus
-          placeholder="edlink-token-lea-..."
-          value={secretRef}
-          onChange={(e) => setSecretRef(e.target.value)}
-        />
-        <Field.HelperText>
-          The bearer token must be staged in the vault before authorize;
-          the server verifies presence before flipping the row to
-          active.
-        </Field.HelperText>
-      </Field.Root>
+      <Text fontSize="sm" color="gray.700">
+        EdLink owns this district's access token. Authorizing activates
+        the integration and starts polling; the token is fetched from
+        EdLink by the LEA's integration id, nothing is staged here.
+      </Text>
       <Field.Root>
         <Field.Label>
           Poll interval: {formatPollInterval(pollInterval)}
@@ -126,7 +113,6 @@ function AuthorizeBody({
         disabled={!valid}
         onConfirm={() =>
           ctx.confirm({
-            secret_ref: secretRef.trim(),
             reason: reason.trim(),
             poll_interval_seconds: pollInterval,
           })
@@ -141,86 +127,6 @@ function AuthorizeBody({
 export const revokeConnectorDialog = createReasonDialog<{
   row: ConnectorAuthorizationOut;
 }>();
-
-// ── Rotate credential ──────────────────────────────────────────────────────
-
-export interface RotateInput {
-  new_secret_ref: string;
-  reason: string;
-}
-
-export const rotateCredentialDialog = createManagedDialog<
-  { row: ConnectorAuthorizationOut },
-  RotateInput
->({
-  size: "md",
-  title: () => "Rotate credential",
-  subtitle: (v) => subtitleFor(v.row),
-  body: (v, ctx) => <RotateBody row={v.row} ctx={ctx} />,
-});
-
-function RotateBody({
-  row,
-  ctx,
-}: {
-  row: ConnectorAuthorizationOut;
-  ctx: ManagedDialogContext<RotateInput>;
-}) {
-  const [newSecretRef, setNewSecretRef] = useState("");
-  const [reason, setReason] = useState("");
-
-  useEffect(() => {
-    setNewSecretRef("");
-    setReason("");
-  }, [row.id]);
-
-  const valid = newSecretRef.trim().length > 0 && reason.trim().length > 0;
-
-  return (
-    <Stack gap={4}>
-      <Text fontSize="sm" color="gray.700">
-        Stage the new token in Key Vault first; this dialog verifies
-        the new name resolves before swapping.
-      </Text>
-      <Field.Root>
-        <Field.Label>Current secret</Field.Label>
-        <Text fontFamily="mono" fontSize="sm" color="gray.600">
-          {row.secret_ref}
-        </Text>
-      </Field.Root>
-      <Field.Root required>
-        <Field.Label>New Key Vault secret name</Field.Label>
-        <Input
-          autoFocus
-          placeholder="edlink-token-lea-...-v2"
-          value={newSecretRef}
-          onChange={(e) => setNewSecretRef(e.target.value)}
-        />
-      </Field.Root>
-      <Field.Root required>
-        <Field.Label>Reason</Field.Label>
-        <Textarea
-          rows={3}
-          placeholder="e.g. annual rotation"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-      </Field.Root>
-      <DialogActions
-        onClose={ctx.close}
-        confirmLabel="Rotate"
-        confirmPalette="purple"
-        disabled={!valid}
-        onConfirm={() =>
-          ctx.confirm({
-            new_secret_ref: newSecretRef.trim(),
-            reason: reason.trim(),
-          })
-        }
-      />
-    </Stack>
-  );
-}
 
 // ── Adjust poll interval ───────────────────────────────────────────────────
 
@@ -303,7 +209,6 @@ export function ConnectorDialogOutlets() {
     <>
       <authorizeConnectorDialog.Viewport />
       <revokeConnectorDialog.Viewport />
-      <rotateCredentialDialog.Viewport />
       <adjustPollIntervalDialog.Viewport />
     </>
   );

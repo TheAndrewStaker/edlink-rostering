@@ -422,7 +422,7 @@ async def test_timeline_unions_all_six_sources_newest_first(
             action="connector.authorized",
             created_at=now - timedelta(hours=1),
             reason="POC walk-through",
-            detail={"partner": _PARTNER, "secret_ref": "kv://x"},
+            detail={"partner": _PARTNER, "created_new_row": True},
         )
         await session.commit()
 

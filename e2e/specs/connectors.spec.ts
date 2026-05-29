@@ -1,21 +1,22 @@
 /**
- * End-to-end specs for the connector authorize pathway.
+ * End-to-end spec for the connector authorize pathway.
  *
- * Two specs cover the mutation-pathway contract from
- * .claude/rules/testing.md:
+ * Happy path: re-authorize an existing connector. EdLink owns the
+ * district's access token (fetched by the LEA's integration id), so
+ * authorize takes only a reason and an optional poll interval; there is
+ * no Key Vault secret to stage. Asserts the authorize call returns 200,
+ * the success toast fires, and the audit-log endpoint carries the new
+ * connector.authorized action.
  *
- *   1. Happy path: re-authorize an existing connector with a Key Vault
- *      secret name that is staged. Asserts the connector row reflects
- *      the operator email and the seeded secret_ref afterwards, and
- *      that the audit-log endpoint carries the new connector.authorized
- *      action.
+ * The former server-error spec drove a 422 by staging an unknown Key
+ * Vault secret name. That validation was removed with the per-LEA
+ * secret model: authorize no longer touches a credential, so the path
+ * no longer exists. Authorize-form validation (reason required, Confirm
+ * disabled until valid) is covered at the component layer per
+ * .claude/rules/testing.md.
  *
- *   2. Server-error path: re-authorize with a Key Vault name that is
- *      not staged. The backend returns 422 (ConnectorSecretNotStaged).
- *      Asserts the error toast appears and the dialog stays open.
- *
- * Both specs target the seeded Valley Charter EdLink connector. The
- * shared db fixture wipes and seeds the database before each spec via
+ * The spec targets the seeded Valley Charter EdLink connector. The
+ * shared db fixture wipes and seeds the database before the spec via
  * dev-reset.sh, so the starting state is deterministic.
  */
 
@@ -23,8 +24,6 @@ import { expect, test } from "@e2e/fixtures/test-base";
 import { API_BASE_URL, mintJwt, signIn } from "@e2e/fixtures/auth";
 
 const LEA_NAME = "Valley Charter";
-const STAGED_SECRET = "e2e-test-token";
-const UNSTAGED_SECRET = "nonexistent-vault-name-xyz";
 
 test.describe("Connector authorize pathway", () => {
   test("happy path: re-authorize an existing connector", async ({
@@ -39,16 +38,11 @@ test.describe("Connector authorize pathway", () => {
     const row = page.getByRole("row").filter({ hasText: LEA_NAME });
     await expect(row).toBeVisible();
     await row.getByRole("button", { name: "Actions" }).click();
-    await page
-      .getByRole("menuitem", { name: /Authorize \/ re-authorize/i })
-      .click();
+    await page.getByRole("menuitem", { name: /Re-authorize/i }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    await dialog
-      .getByLabel("Key Vault secret name")
-      .fill(STAGED_SECRET);
     await dialog.getByLabel("Reason").fill(reason);
 
     const authorizeResponsePromise = page.waitForResponse(
@@ -62,7 +56,7 @@ test.describe("Connector authorize pathway", () => {
     expect(authorizeResponse.status()).toBe(200);
 
     await expect(
-      page.getByText(/Authorized EdLink for lea-valley-charter/i),
+      page.getByText(/Authorized lea-valley-charter/i),
     ).toBeVisible({ timeout: 5000 });
 
     const token = await mintJwt(request, "admin");
@@ -77,40 +71,5 @@ test.describe("Connector authorize pathway", () => {
     const recent = body.entries.find((e) => e.reason === reason);
     expect(recent).toBeDefined();
     expect(recent?.action).toBe("connector.authorized");
-  });
-
-  test("server-error path: unstaged secret returns 422 and shows error toast", async ({
-    page,
-  }) => {
-    await signIn(page, "admin");
-    await page.goto("/connectors");
-
-    const row = page.getByRole("row").filter({ hasText: LEA_NAME });
-    await expect(row).toBeVisible();
-    await row.getByRole("button", { name: "Actions" }).click();
-    await page
-      .getByRole("menuitem", { name: /Authorize \/ re-authorize/i })
-      .click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    await dialog
-      .getByLabel("Key Vault secret name")
-      .fill(UNSTAGED_SECRET);
-    await dialog
-      .getByLabel("Reason")
-      .fill("e2e error-path: secret not staged");
-    await dialog.getByRole("button", { name: "Authorize" }).click();
-
-    await expect(
-      page.getByText(/Authorize failed.*is not staged/i),
-    ).toBeVisible({ timeout: 5000 });
-
-    // The optimistic mutation pattern closes the dialog immediately
-    // after client-side validation. The error toast fires on rollback,
-    // and the table row is unchanged (the connector stays Active).
-    await expect(row).toBeVisible();
-    await expect(row.getByText("Active")).toBeVisible();
   });
 });

@@ -37,6 +37,10 @@ Key design decisions:
 - **Sync jobs are transactional per page.** One `EventPage` from the connector = one database transaction. Cursor advances only on commit.
 - **Operator auth via JWT.** Role-based access (owner, admin, operator, auditor) with per-LEA grants.
 
+## Deployment target
+
+The POC runs locally against real PostgreSQL with four Azure services mocked behind protocols (`infrastructure/azure_mocks/`). The production target is Microsoft Azure: Azure Functions (Flex Consumption) for the poll, reconciliation, sync, and webhook workers; App Service for the FastAPI admin API; Static Web Apps for the SPA; Service Bus Standard (sessions keyed on `lea_id`) for the ingest queue; PostgreSQL Flexible Server with zone-redundant HA; and Key Vault plus managed identity for secrets. Each mock swaps to its real Azure client behind an existing protocol, so business logic does not move.
+
 ## Tech stack
 
 | Layer | Technology |

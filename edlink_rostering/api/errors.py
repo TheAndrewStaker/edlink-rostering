@@ -5,7 +5,9 @@ live as repeated try/except walls inside every router. Each domain
 exception registers once via :func:`register_problem`; the global
 handler converts it (and any plain ``HTTPException``) to a
 ``ProblemDetail`` JSON response with ``Content-Type:
-application/problem+json``.
+application/problem+json``. A catch-all ``Exception`` handler records
+anything unmapped to the telemetry sink and returns a structured 500,
+so unhandled failures are never invisible.
 
 RFC 7807 field semantics:
 
@@ -158,6 +160,49 @@ async def _http_exception_handler(
     )
 
 
+async def _unhandled_exception_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    """Last-resort handler for exceptions with no registered mapping.
+
+    Without this, an unhandled exception produces a bare
+    ``Internal Server Error`` string and the traceback goes only to the
+    server's stdout, never to a durable sink, so a 500 in a long-running
+    dev server is invisible after the terminal scrolls. This records the
+    exception via the telemetry facade (in dev: stdout plus the
+    ``var/logs/app_insights.jsonl`` FileSink) so the class is
+    self-diagnosing, then returns an RFC 7807 500.
+
+    The response ``detail`` is deliberately generic: per
+    ``.claude/rules/security.md`` internal error text and tracebacks
+    never reach the client. The full exception lives in telemetry.
+    """
+
+    # Lazy import: ``dependencies`` pulls in infrastructure wiring, and
+    # this module is imported at app-construction time. Importing inside
+    # the handler keeps the module-load graph acyclic.
+    from edlink_rostering.api.dependencies import get_telemetry
+
+    try:
+        get_telemetry().track_exception(
+            exc,
+            properties={
+                "path": str(request.url.path),
+                "method": request.method,
+            },
+        )
+    except Exception:
+        # Telemetry must never mask or replace the original failure.
+        pass
+
+    return _problem_response(
+        status_code=500,
+        title=_STATUS_TITLES[500],
+        detail="An unexpected error occurred.",
+        instance=str(request.url.path),
+    )
+
+
 async def _validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
@@ -188,6 +233,11 @@ def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         RequestValidationError, _validation_exception_handler  # type: ignore[arg-type]
     )
+    # Catch-all so unmapped exceptions land on a durable telemetry sink
+    # and return a structured 500 instead of a bare string. Registered
+    # before the domain handlers, but Starlette dispatches on the most
+    # specific exception class, so mapped domain exceptions still win.
+    app.add_exception_handler(Exception, _unhandled_exception_handler)
     for exc_type, (status_code, title) in _DOMAIN_EXCEPTIONS.items():
         app.add_exception_handler(
             exc_type, _build_domain_handler(status_code, title)

@@ -137,10 +137,10 @@ async def seeded_world(
                 text(
                     """
                     INSERT INTO connector_authorization (
-                        lea_id, partner, status, secret_ref,
+                        lea_id, partner, status,
                         authorized_by, authorized_at
                     ) VALUES (
-                        :lea, :p, :status, :secret,
+                        :lea, :p, :status,
                         :op, NOW()
                     )
                     """
@@ -149,7 +149,6 @@ async def seeded_world(
                     "lea": lea,
                     "p": _PARTNER,
                     "status": status,
-                    "secret": f"edlink-token-{lea}",
                     "op": op_id,
                 },
             )

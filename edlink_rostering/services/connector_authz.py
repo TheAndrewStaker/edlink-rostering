@@ -1,12 +1,12 @@
 """Connector authorization lifecycle service.
 
-The four verbs the connector management UI exposes (authorize, revoke,
-rotate-credential, adjust-poll-interval) and the read-side list query
-the partner+LEA roll-up table renders. The service layer matches the
-existing ``RetryService`` / ``RevertService`` / ``QuarantineService``
-pattern: each method takes a session_factory, opens its own
-transaction, and writes the matching audit row in the same transaction
-as the canonical change.
+The three verbs the connector management UI exposes (authorize, revoke,
+adjust-poll-interval) and the read-side list query the partner+LEA
+roll-up table renders. The service layer matches the existing
+``RetryService`` / ``RevertService`` / ``QuarantineService`` pattern:
+each method takes a session_factory, opens its own transaction, and
+writes the matching audit row in the same transaction as the canonical
+change.
 
 Audit rows go into ``audit_log`` (V0004). The non-sync audit table is
 the right home for connector lifecycle events: a UNION at read time in
@@ -23,17 +23,16 @@ Authorization model:
   inserts a fresh ``active`` row when no live row exists.
 - ``revoke()`` sets ``revoked_at`` and ``revoked_by`` on the live row.
   A subsequent ``authorize()`` for the same pair inserts a new row.
-- ``rotate_credential()`` updates ``secret_ref`` on the live row; the
-  prior name lands in the audit row's ``detail`` so the rotation
-  history is queryable.
 - ``adjust_poll_interval()`` updates ``poll_interval_seconds`` with a
   60s..3600s bound, audited.
 
-Key Vault verification: ``authorize()`` and ``rotate_credential()``
-verify the staged secret exists in the (mocked) Key Vault before
-committing. The verify step is intentionally minimal in the POC; in
-production it would also call the partner identity endpoint to verify
-the token's scopes.
+Credentials are not modelled here. EdLink owns each district's access
+token and exposes it on the integration object, addressed by the stable
+``edlink_integration_id`` stored on ``leas`` (V0009). The connector
+fetches the token on demand by that id; there is no per-LEA secret the
+operator stages, names, or rotates, so the list query surfaces
+``leas.edlink_integration_id`` for reference and there is no
+rotate-credential verb.
 """
 
 from __future__ import annotations
@@ -48,7 +47,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from edlink_rostering.core.types import LeaId
-from edlink_rostering.infrastructure.ports import SecretNotFound, SecretStore
 
 
 ConnectorStatus = Literal["pending", "active", "revoked", "locked"]
@@ -81,7 +79,7 @@ class ConnectorAuthorizationRow:
     authorized_by_email: str | None
     revoked_at: datetime | None
     revoked_by_email: str | None
-    secret_ref: str
+    edlink_integration_id: str | None
     poll_interval_seconds: int
     notes: str | None
     integration_status: str
@@ -95,7 +93,6 @@ class AuthorizeOutcome:
     lea_id: LeaId
     partner: str
     status: ConnectorStatus
-    secret_ref: str
     poll_interval_seconds: int
     created_new_row: bool
 
@@ -106,15 +103,6 @@ class RevokeOutcome:
     lea_id: LeaId
     partner: str
     revoked_at: datetime
-
-
-@dataclass(frozen=True)
-class RotateCredentialOutcome:
-    id: uuid.UUID
-    lea_id: LeaId
-    partner: str
-    previous_secret_ref: str
-    new_secret_ref: str
 
 
 @dataclass(frozen=True)
@@ -134,10 +122,6 @@ class ConnectorAuthorizationNotFound(ConnectorAuthorizationError):
     """Raised when an action targets a (lea, partner) without a live row."""
 
 
-class ConnectorSecretNotStaged(ConnectorAuthorizationError):
-    """Raised when authorize or rotate references an unknown Key Vault secret."""
-
-
 class ConnectorAuthorizationConflict(ConnectorAuthorizationError):
     """Raised when an authorize attempt conflicts with an existing live row."""
 
@@ -148,10 +132,8 @@ class ConnectorAuthorizationService:
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
-        key_vault: SecretStore,
     ) -> None:
         self._sessions = session_factory
-        self._key_vault = key_vault
 
     # ── Reads ────────────────────────────────────────────────────────────────
 
@@ -193,7 +175,7 @@ class ConnectorAuthorizationService:
                     auth_op.email AS authorized_by_email,
                     ca.revoked_at,
                     revoke_op.email AS revoked_by_email,
-                    ca.secret_ref,
+                    l.edlink_integration_id,
                     ca.poll_interval_seconds,
                     ca.notes,
                     ca.integration_status,
@@ -234,7 +216,7 @@ class ConnectorAuthorizationService:
                 authorized_by_email=r.authorized_by_email,
                 revoked_at=r.revoked_at,
                 revoked_by_email=r.revoked_by_email,
-                secret_ref=r.secret_ref,
+                edlink_integration_id=r.edlink_integration_id,
                 poll_interval_seconds=r.poll_interval_seconds,
                 notes=r.notes,
                 integration_status=r.integration_status,
@@ -251,7 +233,6 @@ class ConnectorAuthorizationService:
         *,
         lea_id: LeaId,
         partner: str,
-        secret_ref: str,
         operator_id: uuid.UUID,
         reason: str,
         poll_interval_seconds: int | None = None,
@@ -267,7 +248,6 @@ class ConnectorAuthorizationService:
            re-authorize attempt is on the record).
         """
 
-        self._verify_secret(secret_ref)
         now = datetime.now(UTC)
 
         async with self._sessions() as session:
@@ -288,11 +268,10 @@ class ConnectorAuthorizationService:
                         """
                         INSERT INTO connector_authorization (
                             id, lea_id, partner, status, authorized_at,
-                            authorized_by, secret_ref,
-                            poll_interval_seconds, notes
+                            authorized_by, poll_interval_seconds, notes
                         ) VALUES (
                             :id, :lea, :partner, 'active', :now,
-                            :by, :secret, :interval, :notes
+                            :by, :interval, :notes
                         )
                         """
                     ),
@@ -302,7 +281,6 @@ class ConnectorAuthorizationService:
                         "partner": partner,
                         "now": now,
                         "by": operator_id,
-                        "secret": secret_ref,
                         "interval": interval,
                         "notes": notes,
                     },
@@ -312,7 +290,6 @@ class ConnectorAuthorizationService:
                     lea_id=lea_id,
                     partner=partner,
                     status="active",
-                    secret_ref=secret_ref,
                     poll_interval_seconds=interval,
                     created_new_row=True,
                 )
@@ -330,7 +307,6 @@ class ConnectorAuthorizationService:
                         SET status = 'active',
                             authorized_at = :now,
                             authorized_by = :by,
-                            secret_ref = :secret,
                             poll_interval_seconds = :interval,
                             notes = COALESCE(:notes, notes)
                         WHERE id = :id
@@ -340,7 +316,6 @@ class ConnectorAuthorizationService:
                         "id": current["id"],
                         "now": now,
                         "by": operator_id,
-                        "secret": secret_ref,
                         "interval": interval,
                         "notes": notes,
                     },
@@ -350,7 +325,6 @@ class ConnectorAuthorizationService:
                     lea_id=lea_id,
                     partner=partner,
                     status="active",
-                    secret_ref=secret_ref,
                     poll_interval_seconds=interval,
                     created_new_row=False,
                 )
@@ -361,7 +335,6 @@ class ConnectorAuthorizationService:
                     lea_id=lea_id,
                     partner=partner,
                     status=current["status"],
-                    secret_ref=current["secret_ref"],
                     poll_interval_seconds=current["poll_interval_seconds"],
                     created_new_row=False,
                 )
@@ -376,7 +349,6 @@ class ConnectorAuthorizationService:
                 reason=reason,
                 detail={
                     "partner": partner,
-                    "secret_ref": secret_ref,
                     "previous_status": previous_status,
                     "created_new_row": outcome.created_new_row,
                 },
@@ -425,7 +397,6 @@ class ConnectorAuthorizationService:
                 reason=reason,
                 detail={
                     "partner": partner,
-                    "secret_ref": current["secret_ref"],
                     "previous_status": current["status"],
                 },
                 created_at=now,
@@ -436,61 +407,6 @@ class ConnectorAuthorizationService:
             lea_id=lea_id,
             partner=partner,
             revoked_at=now,
-        )
-
-    async def rotate_credential(
-        self,
-        *,
-        lea_id: LeaId,
-        partner: str,
-        new_secret_ref: str,
-        operator_id: uuid.UUID,
-        reason: str,
-    ) -> RotateCredentialOutcome:
-        """Swap the Key Vault secret reference on the live row."""
-
-        self._verify_secret(new_secret_ref)
-        now = datetime.now(UTC)
-        async with self._sessions() as session:
-            current = await self._load_live_row(session, lea_id, partner)
-            if current is None:
-                raise ConnectorAuthorizationNotFound(
-                    f"No live connector_authorization for {lea_id!r} on"
-                    f" {partner!r}."
-                )
-            previous_secret_ref = current["secret_ref"]
-            await session.execute(
-                text(
-                    """
-                    UPDATE connector_authorization
-                    SET secret_ref = :secret
-                    WHERE id = :id
-                    """
-                ),
-                {"id": current["id"], "secret": new_secret_ref},
-            )
-            await _write_audit_log(
-                session=session,
-                operator_id=operator_id,
-                action="connector.credential_rotated",
-                target_kind="connector_authorization",
-                target_id=str(current["id"]),
-                lea_id=lea_id,
-                reason=reason,
-                detail={
-                    "partner": partner,
-                    "previous_secret_ref": previous_secret_ref,
-                    "new_secret_ref": new_secret_ref,
-                },
-                created_at=now,
-            )
-            await session.commit()
-        return RotateCredentialOutcome(
-            id=current["id"],
-            lea_id=lea_id,
-            partner=partner,
-            previous_secret_ref=previous_secret_ref,
-            new_secret_ref=new_secret_ref,
         )
 
     async def adjust_poll_interval(
@@ -550,14 +466,6 @@ class ConnectorAuthorizationService:
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
-    def _verify_secret(self, secret_ref: str) -> None:
-        try:
-            self._key_vault.get_secret(secret_ref)
-        except SecretNotFound as exc:
-            raise ConnectorSecretNotStaged(
-                f"Key Vault secret {secret_ref!r} is not staged."
-            ) from exc
-
     def _validate_interval(self, seconds: int) -> int:
         if seconds < _POLL_INTERVAL_MIN or seconds > _POLL_INTERVAL_MAX:
             raise ValueError(
@@ -589,7 +497,7 @@ class ConnectorAuthorizationService:
             await session.execute(
                 text(
                     """
-                    SELECT id, status, secret_ref, poll_interval_seconds
+                    SELECT id, status, poll_interval_seconds
                     FROM connector_authorization
                     WHERE lea_id = :lea AND partner = :partner
                       AND revoked_at IS NULL
@@ -603,7 +511,6 @@ class ConnectorAuthorizationService:
         return {
             "id": row.id,
             "status": row.status,
-            "secret_ref": row.secret_ref,
             "poll_interval_seconds": row.poll_interval_seconds,
         }
 
@@ -653,8 +560,6 @@ __all__ = [
     "ConnectorAuthorizationNotFound",
     "ConnectorAuthorizationRow",
     "ConnectorAuthorizationService",
-    "ConnectorSecretNotStaged",
     "ConnectorStatus",
     "RevokeOutcome",
-    "RotateCredentialOutcome",
 ]

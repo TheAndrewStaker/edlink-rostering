@@ -1093,8 +1093,9 @@ async def _seed_connector_authorizations(
 
     Plus the single-LEA operator personas' authorized LEAs are also
     inserted so the multi-tenancy enforcement tests have something to
-    point at. `secret_ref` is a Key Vault name placeholder; the value
-    itself never lives in Postgres.
+    point at. The EdLink integration handle lives on
+    ``leas.edlink_integration_id`` (seeded with the LEA); the
+    authorization row carries no per-LEA secret.
     """
 
     op_ids = await _load_operator_ids_by_subject(session)
@@ -1107,16 +1108,14 @@ async def _seed_connector_authorizations(
                 """
                 INSERT INTO connector_authorization
                     (id, lea_id, partner, status, authorized_at,
-                     authorized_by, secret_ref, poll_interval_seconds,
-                     notes)
+                     authorized_by, poll_interval_seconds, notes)
                 VALUES
                     (:id, :lea, 'edlink', 'active', :now,
-                     :by, :secret, 300, :notes)
+                     :by, 300, :notes)
                 ON CONFLICT (id) DO UPDATE SET
                     status = EXCLUDED.status,
                     authorized_at = EXCLUDED.authorized_at,
                     authorized_by = EXCLUDED.authorized_by,
-                    secret_ref = EXCLUDED.secret_ref,
                     poll_interval_seconds = EXCLUDED.poll_interval_seconds,
                     notes = EXCLUDED.notes
                 """
@@ -1126,7 +1125,6 @@ async def _seed_connector_authorizations(
                 "lea": lea.id,
                 "now": now,
                 "by": authorized_by,
-                "secret": f"edlink-token-{lea.id}",
                 "notes": "dev seed; edlink mock connector",
             },
         )

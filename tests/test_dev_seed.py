@@ -278,11 +278,12 @@ async def test_seed_inserts_connector_authorization_per_lea(
             await session.execute(
                 text(
                     """
-                    SELECT lea_id, status, secret_ref
-                    FROM connector_authorization
-                    WHERE partner = 'edlink'
-                      AND lea_id = ANY(:leas)
-                    ORDER BY lea_id
+                    SELECT ca.lea_id, ca.status, l.edlink_integration_id
+                    FROM connector_authorization ca
+                    JOIN leas l ON l.id = ca.lea_id
+                    WHERE ca.partner = 'edlink'
+                      AND ca.lea_id = ANY(:leas)
+                    ORDER BY ca.lea_id
                     """
                 ),
                 {"leas": [lea.id for lea in SEEDED_LEAS]},
@@ -290,7 +291,13 @@ async def test_seed_inserts_connector_authorization_per_lea(
         ).all()
     assert len(rows) == len(SEEDED_LEAS)
     assert all(r.status == "active" for r in rows)
-    assert all(r.secret_ref.startswith("edlink-token-") for r in rows)
+    # The EdLink integration handle lives on leas, not on the
+    # authorization row; the seed populates it for every LEA.
+    assert all(
+        r.edlink_integration_id
+        and r.edlink_integration_id.startswith("edlink-int-")
+        for r in rows
+    )
 
 
 def _scalar(result: Any) -> Any:

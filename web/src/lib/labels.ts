@@ -46,6 +46,27 @@ export const LEA_TYPE_DISPLAY: Record<string, string> = {
   state_agency: "State agency",
 };
 
+/**
+ * Display label for the LEA lifecycle status enum
+ * (prospect, invited, onboarding, pilot, active, plus
+ * decommissioned / revoked / expired). The dashboard surfaces this so
+ * a mid-onboarding LEA reads differently from a steady-state one.
+ */
+export const LEA_STATUS_DISPLAY: Record<string, string> = {
+  prospect: "Prospect",
+  invited: "Invited",
+  onboarding: "Onboarding",
+  pilot: "Pilot",
+  active: "Active",
+  decommissioned: "Decommissioned",
+  revoked: "Revoked",
+  expired: "Invite expired",
+};
+
+export function labelForLeaStatus(status: string): string {
+  return LEA_STATUS_DISPLAY[status] ?? capitalize(status);
+}
+
 export const CONNECTOR_STATUS_DISPLAY: Record<string, string> = {
   pending: "Pending",
   active: "Active",

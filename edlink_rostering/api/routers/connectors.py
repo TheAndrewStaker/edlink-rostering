@@ -1,10 +1,9 @@
 """Connector authorization endpoints.
 
 The Phase 1.5d surface from ``docs/design/admin-surfaces.md``: list +
-four lifecycle verbs (authorize, revoke, rotate-credential,
-adjust-poll-interval). Mutations are gated to ``admin`` per
-the role matrix; the list is open to ``auditor`` (and therefore
-operator + admin + owner).
+three lifecycle verbs (authorize, revoke, adjust-poll-interval).
+Mutations are gated to ``admin`` per the role matrix; the list is open
+to ``auditor`` (and therefore operator + admin + owner).
 
 Multi-tenancy on the list endpoint: the ``operator`` role is scoped to
 its ``authorized_leas`` set, and the list query filters by that set so
@@ -16,9 +15,8 @@ Every mutation writes an ``audit_log`` row in the same transaction as
 the canonical change. The audit-log explorer in Phase 2 will UNION
 these with the sync-side audit tables.
 
-Domain exceptions (``ConnectorSecretNotStaged``,
-``ConnectorAuthorizationNotFound``) are mapped to RFC 7807 ProblemDetail
-responses by the global handler registered in
+Domain exceptions (``ConnectorAuthorizationNotFound``) are mapped to
+RFC 7807 ProblemDetail responses by the global handler registered in
 :mod:`edlink_rostering.api.errors`. Routers just ``raise``.
 
 Mutation endpoints accept an optional ``Idempotency-Key`` header.
@@ -30,7 +28,7 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from edlink_rostering.api.auth import Operator, require
-from edlink_rostering.api.dependencies import get_key_vault, get_session_factory
+from edlink_rostering.api.dependencies import get_session_factory
 from edlink_rostering.api.schemas import (
     ConnectorAdjustPollIntervalRequest,
     ConnectorAdjustPollIntervalResponse,
@@ -39,11 +37,8 @@ from edlink_rostering.api.schemas import (
     ConnectorAuthorizeResponse,
     ConnectorRevokeRequest,
     ConnectorRevokeResponse,
-    ConnectorRotateCredentialRequest,
-    ConnectorRotateCredentialResponse,
 )
 from edlink_rostering.core.types import LeaId
-from edlink_rostering.infrastructure.ports import SecretStore
 from edlink_rostering.services.connector_authz import ConnectorAuthorizationService
 from edlink_rostering.services.idempotency import with_idempotency
 
@@ -53,11 +48,8 @@ router = APIRouter(prefix="/connectors", tags=["connectors"])
 
 def _service(
     factory: async_sessionmaker[AsyncSession],
-    key_vault: SecretStore,
 ) -> ConnectorAuthorizationService:
-    return ConnectorAuthorizationService(
-        session_factory=factory, key_vault=key_vault
-    )
+    return ConnectorAuthorizationService(session_factory=factory)
 
 
 def _row_to_out(row: object) -> ConnectorAuthorizationOut:
@@ -72,7 +64,6 @@ def _row_to_out(row: object) -> ConnectorAuthorizationOut:
 async def list_connectors(
     op: Operator = Depends(require("auditor")),
     factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
-    key_vault: SecretStore = Depends(get_key_vault),
     lea_id: str | None = Query(default=None),
     include_revoked: bool = Query(default=False),
 ) -> list[ConnectorAuthorizationOut]:
@@ -101,7 +92,7 @@ async def list_connectors(
     else:
         scope = None
 
-    rows = await _service(factory, key_vault).list_authorizations(
+    rows = await _service(factory).list_authorizations(
         scope,
         lea_id=LeaId(lea_id) if lea_id else None,
         include_revoked=include_revoked,
@@ -121,14 +112,12 @@ async def authorize_connector(
     request: Request,
     op: Operator = Depends(require("admin")),
     factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
-    key_vault: SecretStore = Depends(get_key_vault),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> ConnectorAuthorizeResponse:
     async def _work() -> ConnectorAuthorizeResponse:
-        outcome = await _service(factory, key_vault).authorize(
+        outcome = await _service(factory).authorize(
             lea_id=LeaId(lea_id),
             partner=partner,
-            secret_ref=body.secret_ref,
             operator_id=op.id,
             reason=body.reason,
             poll_interval_seconds=body.poll_interval_seconds,
@@ -139,7 +128,6 @@ async def authorize_connector(
             lea_id=outcome.lea_id,
             partner=outcome.partner,
             status=outcome.status,
-            secret_ref=outcome.secret_ref,
             poll_interval_seconds=outcome.poll_interval_seconds,
             created_new_row=outcome.created_new_row,
         )
@@ -168,11 +156,10 @@ async def revoke_connector(
     request: Request,
     op: Operator = Depends(require("admin")),
     factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
-    key_vault: SecretStore = Depends(get_key_vault),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> ConnectorRevokeResponse:
     async def _work() -> ConnectorRevokeResponse:
-        outcome = await _service(factory, key_vault).revoke(
+        outcome = await _service(factory).revoke(
             lea_id=LeaId(lea_id),
             partner=partner,
             operator_id=op.id,
@@ -198,49 +185,6 @@ async def revoke_connector(
 
 
 @router.post(
-    "/{lea_id}/{partner}/rotate-credential",
-    response_model=ConnectorRotateCredentialResponse,
-    operation_id="connectors.rotate_credential",
-)
-async def rotate_connector_credential(
-    lea_id: str,
-    partner: str,
-    body: ConnectorRotateCredentialRequest,
-    request: Request,
-    op: Operator = Depends(require("admin")),
-    factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
-    key_vault: SecretStore = Depends(get_key_vault),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-) -> ConnectorRotateCredentialResponse:
-    async def _work() -> ConnectorRotateCredentialResponse:
-        outcome = await _service(factory, key_vault).rotate_credential(
-            lea_id=LeaId(lea_id),
-            partner=partner,
-            new_secret_ref=body.new_secret_ref,
-            operator_id=op.id,
-            reason=body.reason,
-        )
-        return ConnectorRotateCredentialResponse(
-            id=outcome.id,
-            lea_id=outcome.lea_id,
-            partner=outcome.partner,
-            previous_secret_ref=outcome.previous_secret_ref,
-            new_secret_ref=outcome.new_secret_ref,
-        )
-
-    return await with_idempotency(
-        factory=factory,
-        operator_id=op.id,
-        route="connectors.rotate_credential",
-        path=request.url.path,
-        idempotency_key=idempotency_key,
-        request_body=body,
-        response_model=ConnectorRotateCredentialResponse,
-        handler=_work,
-    )
-
-
-@router.post(
     "/{lea_id}/{partner}/adjust-poll-interval",
     response_model=ConnectorAdjustPollIntervalResponse,
     operation_id="connectors.adjust_poll_interval",
@@ -252,11 +196,10 @@ async def adjust_poll_interval(
     request: Request,
     op: Operator = Depends(require("admin")),
     factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
-    key_vault: SecretStore = Depends(get_key_vault),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> ConnectorAdjustPollIntervalResponse:
     async def _work() -> ConnectorAdjustPollIntervalResponse:
-        outcome = await _service(factory, key_vault).adjust_poll_interval(
+        outcome = await _service(factory).adjust_poll_interval(
             lea_id=LeaId(lea_id),
             partner=partner,
             new_poll_interval_seconds=body.new_poll_interval_seconds,

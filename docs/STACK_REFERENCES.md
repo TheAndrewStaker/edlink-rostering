@@ -106,18 +106,20 @@ When agents are reasoning about library APIs:
 
 | Component | Current | Notes |
 |---|---|---|
-| Cloud provider | `[VERIFY]` | TBD |
-| Container runtime | Docker / containerd | |
-| Container orchestration | `[VERIFY]` | ECS, EKS, Cloud Run, or similar |
-| Observability | OpenTelemetry-compatible | |
+| Cloud provider | Microsoft Azure | Existing Journify platform (Q-009 / Q-011 confirmed). |
+| Compute | Azure Functions (Flex Consumption) for workers; Azure App Service for the FastAPI admin API | Flex Consumption is scale-to-zero, VNet-integrated, with no enforced execution timeout. One plan hosts the poll timer, reconciliation timer, sync session-trigger, and the Data Feeds webhook HTTP-trigger. |
+| Messaging | Azure Service Bus Standard, sessions on (`session_id=lea_id`) | Sessions and duplicate detection ship on Standard; Premium only for private endpoints, geo-replication, or messages over 256 KB. Resolves Q-019. |
+| Database | Azure Database for PostgreSQL Flexible Server, zone-redundant HA from day one (General Purpose tier floor) | Burstable cannot do HA. |
+| Secrets | Azure Key Vault (one EdLink application secret plus the JWT signing key), reached by managed identity | No per-LEA token in Key Vault; EdLink owns per-LEA tokens, re-fetched by `integration_id`. |
+| Scheduler | Azure Functions timer triggers | Poll cadence and daily reconciliation. Resolves Q-020. |
+| Container runtime | Docker / containerd (local dev) | |
+| Observability | Azure Monitor OpenTelemetry distro to workspace-based App Insights + Log Analytics | Sampling off by default; alert on custom metrics, which are never sampled. |
 | Logging | Structured JSON via structlog | Per `.claude/rules/security.md` no-PII rule |
-| Metrics | Prometheus-compatible | |
-| Tracing | OpenTelemetry | |
-| Error tracking | Sentry / Honeybadger / similar | |
+| Static frontend | Azure Static Web Apps, linked to the App Service backend | |
 
 ## Migration considerations on the horizon
 
-- **Python 3.14** has been GA since October 2025 (3.14.5 as of May 2026). 3.13 remains the safe pick if ecosystem libs lag; 3.14 is production-eligible with most major libs (asyncpg, FastAPI, SQLAlchemy) shipping 3.14 wheels.
+- **Python 3.14** has been GA since October 2025 (3.14.5 as of May 2026), but the deploy target sets the ceiling: Azure Functions lists Python **3.13 as its highest GA runtime**, with 3.14 only in **Preview** on Flex Consumption (remote build does not yet support 3.14). So the worker code pins **3.13 GA** (supported through October 2029) to match the production runtime and avoid local-vs-prod version skew. A locally installed 3.14 SDK is fine; develop against 3.13 to mirror prod. Revisit when 3.14 reaches GA on Functions with remote-build support.
 - **Ed-Fi API v8 (Data Management Service)** Release 8.0 ships July 2026 for **pilot / parallel use in school year 2026-2027** with new relational table design. Production milestone is Release 8.1 in Q4 2026 for school year 2027-2028. Plan consumer-side migration when the application adopts it. Source: https://docs.ed-fi.org/reference/roadmap/api-faq/
 - **Ed-Fi ODS/API .NET 10 upgrade** in 7.3.2 ahead of .NET 8 EOL November 2026. Not the application's direct concern but affects state Ed-Fi infrastructure.
 - **SEDM stabilization** — early access today; track for transition to stable release.

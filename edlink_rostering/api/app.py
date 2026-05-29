@@ -38,7 +38,6 @@ from edlink_rostering.core.logging import configure_logging
 from edlink_rostering.core.settings import get_settings
 from edlink_rostering.services.connector_authz import (
     ConnectorAuthorizationNotFound,
-    ConnectorSecretNotStaged,
 )
 from edlink_rostering.services.idempotency import (
     IdempotencyConflict,
@@ -74,11 +73,6 @@ register_problem(
     title="Quarantine Already Resolved",
 )
 register_problem(QuarantineRefused, status=409, title="Quarantine Refused")
-register_problem(
-    ConnectorSecretNotStaged,
-    status=422,
-    title="Connector Secret Not Staged",
-)
 register_problem(
     ConnectorAuthorizationNotFound,
     status=404,

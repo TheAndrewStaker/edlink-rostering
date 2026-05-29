@@ -231,7 +231,7 @@ class ConnectorAuthorizationOut(BaseModel):
     authorized_by_email: str | None
     revoked_at: datetime | None
     revoked_by_email: str | None
-    secret_ref: str
+    edlink_integration_id: str | None
     poll_interval_seconds: int
     notes: str | None
     integration_status: str
@@ -240,7 +240,6 @@ class ConnectorAuthorizationOut(BaseModel):
 
 
 class ConnectorAuthorizeRequest(BaseModel):
-    secret_ref: str = Field(min_length=1)
     reason: str = Field(min_length=1)
     poll_interval_seconds: int | None = Field(default=None, ge=60, le=3600)
     notes: str | None = None
@@ -251,7 +250,6 @@ class ConnectorAuthorizeResponse(BaseModel):
     lea_id: str
     partner: str
     status: str
-    secret_ref: str
     poll_interval_seconds: int
     created_new_row: bool
 
@@ -265,19 +263,6 @@ class ConnectorRevokeResponse(BaseModel):
     lea_id: str
     partner: str
     revoked_at: datetime
-
-
-class ConnectorRotateCredentialRequest(BaseModel):
-    new_secret_ref: str = Field(min_length=1)
-    reason: str = Field(min_length=1)
-
-
-class ConnectorRotateCredentialResponse(BaseModel):
-    id: uuid.UUID
-    lea_id: str
-    partner: str
-    previous_secret_ref: str
-    new_secret_ref: str
 
 
 class ConnectorAdjustPollIntervalRequest(BaseModel):
@@ -380,8 +365,6 @@ __all__ = [
     "ConnectorAuthorizeResponse",
     "ConnectorRevokeRequest",
     "ConnectorRevokeResponse",
-    "ConnectorRotateCredentialRequest",
-    "ConnectorRotateCredentialResponse",
     "CursorStateRow",
     "LeaCreateRequest",
     "LeaCreateResponse",

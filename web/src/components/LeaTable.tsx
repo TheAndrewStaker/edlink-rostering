@@ -10,6 +10,7 @@ import {
   type SortKey,
 } from "@/lib/leaFilters";
 import {
+  labelForLeaStatus,
   labelForLeaType,
   labelForPartner,
   labelForSeverity,
@@ -235,6 +236,22 @@ function LeaRow({ row, cursor, selected, onClick }: LeaRowProps) {
   const { lea, severity } = row;
   const lagWarn = lea.cursor_lag_days != null && lea.cursor_lag_days > 20;
   const lagStale = lea.cursor_lag_days != null && lea.cursor_lag_days > 0.5;
+  const status = lea.status;
+  const statusBadge =
+    status && status !== "active" ? (
+      <DsBadge
+        tone={
+          status === "decommissioned" ||
+          status === "revoked" ||
+          status === "expired"
+            ? "mute"
+            : "info"
+        }
+        style={{ marginLeft: 8 }}
+      >
+        {labelForLeaStatus(status)}
+      </DsBadge>
+    ) : null;
 
   return (
     <tr
@@ -247,7 +264,13 @@ function LeaRow({ row, cursor, selected, onClick }: LeaRowProps) {
         <div style={{ display: "flex", alignItems: "center" }}>
           <span className={`tbl-rail ${railClassForSeverity(severity)}`} />
           <div className="cell-stack">
-            <span className="name">{lea.name}</span>
+            <span
+              className="name"
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
+              {lea.name}
+              {statusBadge}
+            </span>
             <span className="id">
               {lea.id} &middot; {lea.state}
             </span>

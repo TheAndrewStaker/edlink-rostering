@@ -3,8 +3,8 @@
  *
  * Cross-LEA view of connector authorization rows. One row per
  * ``(lea, partner)`` pair, with the connector lifecycle actions
- * (Authorize / Revoke / Rotate credential / Adjust poll interval)
- * scoped to a single integration.
+ * (Authorize / Revoke / Adjust poll interval) scoped to a single
+ * integration.
  *
  * Why "Integrations" and not "Connectors":
  *
@@ -42,14 +42,12 @@ import {
   adjustPollIntervalDialog,
   authorizeConnectorDialog,
   revokeConnectorDialog,
-  rotateCredentialDialog,
 } from "@/components/ConnectorActions";
 import { DsBadge } from "@/components/DsBadge";
 import {
   combinedStatusView,
   formatPollInterval,
   labelForPartner,
-  labelForSharingScope,
 } from "@/lib/labels";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import { toneForPartner } from "@/lib/tones";
@@ -282,18 +280,15 @@ export function IntegrationsPage() {
     mutationFn: ({
       lea_id,
       partner,
-      secret_ref,
       reason,
       poll_interval_seconds,
     }: {
       lea_id: string;
       partner: string;
-      secret_ref: string;
       reason: string;
       poll_interval_seconds?: number;
     }) =>
       api.authorizeConnector(lea_id, partner, {
-        secret_ref,
         reason,
         poll_interval_seconds,
       }),
@@ -323,30 +318,6 @@ export function IntegrationsPage() {
     },
     onError: (err: Error) => {
       notifyError(`Revoke failed: ${err.message}`);
-    },
-    onSettled: invalidate,
-  });
-
-  const rotateMutation = useMutation({
-    mutationFn: ({
-      lea_id,
-      partner,
-      new_secret_ref,
-      reason,
-    }: {
-      lea_id: string;
-      partner: string;
-      new_secret_ref: string;
-      reason: string;
-    }) =>
-      api.rotateConnectorCredential(lea_id, partner, new_secret_ref, reason),
-    onSuccess: (result) => {
-      notifySuccess(
-        `Rotated credential for ${result.lea_id} on ${result.partner}.`,
-      );
-    },
-    onError: (err: Error) => {
-      notifyError(`Rotate failed: ${err.message}`);
     },
     onSettled: invalidate,
   });
@@ -407,16 +378,6 @@ export function IntegrationsPage() {
       lea_id: row.lea_id,
       partner: row.partner,
       reason: result.reason,
-    });
-  };
-
-  const onRotate = async (row: ConnectorAuthorizationOut) => {
-    const result = await rotateCredentialDialog.open({ row });
-    if (!result) return;
-    rotateMutation.mutate({
-      lea_id: row.lea_id,
-      partner: row.partner,
-      ...result,
     });
   };
 
@@ -517,12 +478,11 @@ export function IntegrationsPage() {
                 <th>LEA</th>
                 <th style={{ width: 90 }}>Partner</th>
                 <th style={{ width: 130 }}>Status</th>
-                <th style={{ width: 100 }}>Sharing</th>
                 <th style={{ width: 150 }}>Authorized by</th>
                 <th className="num" style={{ width: 90 }}>
                   Poll interval
                 </th>
-                <th style={{ width: 170 }}>Secret ref</th>
+                <th style={{ width: 170 }}>Integration ID</th>
                 <th style={{ width: 90, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
@@ -549,16 +509,6 @@ export function IntegrationsPage() {
                       fontSize: 12,
                     }}
                   >
-                    {row.sharing_scope
-                      ? labelForSharingScope(row.sharing_scope)
-                      : "—"}
-                  </td>
-                  <td
-                    style={{
-                      color: "var(--ink-2)",
-                      fontSize: 12,
-                    }}
-                  >
                     {row.authorized_by_email ?? "—"}
                   </td>
                   <td
@@ -577,9 +527,11 @@ export function IntegrationsPage() {
                       fontSize: 11,
                       color: "var(--ink-3)",
                     }}
-                    title={row.secret_ref}
+                    title={row.edlink_integration_id ?? undefined}
                   >
-                    {compactSecret(row.secret_ref)}
+                    {row.edlink_integration_id
+                      ? compactIntegrationId(row.edlink_integration_id)
+                      : "—"}
                   </td>
                   <td style={{ textAlign: "right" }}>
                     <Menu.Root>
@@ -613,13 +565,6 @@ export function IntegrationsPage() {
                               fontSize: 13,
                             }}
                           >
-                            <Menu.Item
-                              value="rotate"
-                              onClick={() => onRotate(row)}
-                              style={menuItemStyle()}
-                            >
-                              Rotate credential
-                            </Menu.Item>
                             <Menu.Item
                               value="adjust"
                               onClick={() => onAdjust(row)}
@@ -854,7 +799,7 @@ function CombinedStatusCell({ row }: { row: ConnectorAuthorizationOut }) {
 }
 
 
-function compactSecret(value: string): string {
+function compactIntegrationId(value: string): string {
   if (value.length <= 28) return value;
   return `${value.slice(0, 16)}…${value.slice(-8)}`;
 }

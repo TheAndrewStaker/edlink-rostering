@@ -5,7 +5,6 @@ import { api } from "@/api/client";
 
 export function KpiStrip() {
   const leas = useQuery({ queryKey: ["leas"], queryFn: api.listLeas });
-  const alerts = useQuery({ queryKey: ["alerts"], queryFn: api.listAlerts });
   const quarantine = useQuery({
     queryKey: ["quarantine"],
     queryFn: () => api.listQuarantine(),
@@ -20,7 +19,6 @@ export function KpiStrip() {
   ).length;
   const healthy = Math.max(0, totalLeas - failed - stale);
   const needsAttention = totalLeas - healthy;
-  const activeAlerts = alerts.data?.length ?? 0;
   const quarantineBacklog = (quarantine.data ?? []).filter(
     (r) => r.resolved_at == null,
   ).length;
@@ -35,6 +33,12 @@ export function KpiStrip() {
     (sum, l) => sum + (l.in_flight_count ?? 0),
     0,
   );
+  const onboarding = (leas.data ?? []).filter(
+    (l) =>
+      l.status === "invited" ||
+      l.status === "onboarding" ||
+      l.status === "pilot",
+  ).length;
 
   return (
     <div className="kpi-grid">
@@ -69,16 +73,6 @@ export function KpiStrip() {
               ? "good"
               : "bad"
         }
-      />
-      <KpiTile
-        label="Active alerts"
-        value={activeAlerts}
-        helpText={
-          activeAlerts === 0
-            ? "no alerts firing"
-            : `${activeAlerts} firing right now`
-        }
-        tone={activeAlerts === 0 ? "good" : "bad"}
       />
       <KpiTile
         label="Quarantine backlog"
@@ -122,6 +116,16 @@ export function KpiStrip() {
             : `${inFlight} sync${inFlight === 1 ? "" : "s"} in progress`
         }
         tone={inFlight === 0 ? "neutral" : "warn"}
+      />
+      <KpiTile
+        label="In onboarding"
+        value={onboarding}
+        helpText={
+          onboarding === 0
+            ? "none in the funnel"
+            : `${onboarding} invited, onboarding, or in pilot`
+        }
+        tone={onboarding === 0 ? "neutral" : "warn"}
       />
     </div>
   );

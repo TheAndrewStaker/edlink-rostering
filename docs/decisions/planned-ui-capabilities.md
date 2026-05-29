@@ -59,7 +59,7 @@ authorization, and optionally triggers a cold-start sync.
 
 **Design decisions:**
 - Multi-step dialog: (1) LEA identity (name, state, NCES ID, type),
-  (2) connector config (partner, secret ref, poll interval),
+  (2) connector config (partner, integration_id, poll interval),
   (3) confirmation.
 - Creates LEA + connector_authorization rows in one transaction.
 - Optionally triggers initial sync on completion.
@@ -100,7 +100,7 @@ the CLI `connector authorize` command.
 
 **Design decisions:**
 - Dialog fields: LEA (select from existing), partner (select),
-  secret reference (Key Vault path), poll interval, notes.
+  poll interval, notes. No secret field: EdLink owns the per-LEA token, re-fetched by `integration_id`; onboarding captures the `integration_id` and the operator never names or pastes a credential.
 - Calls `POST /connectors/{lea_id}/{partner}/authorize` (already
   exists and is functional).
 - On success, invalidates connectors query and shows confirmation.
@@ -128,8 +128,8 @@ by LEA name/ID, partner, and status.
   pending, locked, revoked).
 - All filters are AND-composed and apply client-side against the
   cached connector list.
-- Include a hint label: "kv://... = Azure Key Vault secret reference"
-  (explains the secret_ref column format).
+- The table's Integration ID column shows `leas.edlink_integration_id`
+  (the EdLink-assigned handle, non-secret); no credential is shown.
 
 ---
 
